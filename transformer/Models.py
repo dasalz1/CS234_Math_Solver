@@ -3,22 +3,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from transformer.Layers import EncoderLayer, DecoderLayer
-
-
-__author__ = "Yu-Hsiang Huang"
-
-
-def get_pad_mask(seq, pad_idx):
-    return (seq != pad_idx).unsqueeze(-2)
-
-
-def get_subsequent_mask(seq):
-    ''' For masking out the subsequent info. '''
-    sz_b, len_s = seq.size()
-    subsequent_mask = (1 - torch.triu(
-        torch.ones((1, len_s, len_s), device=seq.device), diagonal=1)).bool()
-    return subsequent_mask
-
+from utils import get_pad_mask, get_subsequent_mask
 
 class PositionalEncoding(nn.Module):
 
