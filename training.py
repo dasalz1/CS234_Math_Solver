@@ -32,6 +32,8 @@ class Trainer:
         return all_returns
 
     def train_policy_epoch(self, training_data, model, gamma, optimizer):
+
+        model.train()
         ignore_index = model.action_transformer.trg_pad_idx
         
     #     sample batch of questions and answers
