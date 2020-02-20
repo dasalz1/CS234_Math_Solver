@@ -31,6 +31,84 @@ class Trainer:
     
         return all_returns
 
+
+    def compute_mle_loss(self, pred, target, smoothing, log=False):
+        def compute_loss(pred, target, smoothing):
+            target = target.contiguous().view(-1)
+            if smoothing:
+              eps = 0.1
+              n_class = pred.size(1)
+
+              one_hot = torch.zeros_like(pred)
+              one_hot = one_hot.scatter(1, target.view(-1, 1), 1)
+              one_hot = one_hot * (1 - eps) + (1 - one_hot) * eps / (n_class - 1)
+              log_prb = F.log_softmax(pred, dim=1)
+
+              non_pad_mask = target.ne(PAD)
+              loss = -(one_hot * log_prb).sum(dim=1)
+              loss = loss.masked_select(non_pad_mask).sum()  # average later
+            else:
+                
+              loss = F.cross_entropy(pred, target, ignore_index=PAD, reduction='sum')    
+            return loss
+        
+        loss = compute_loss(pred, target, smoothing)
+        pred_max = pred.max(1)[1]
+        target = target.contiguous().view(-1)
+        non_pad_mask = target.ne(PAD)
+        n_correct = pred_max.eq(target)
+        n_correct = n_correct.masked_select(non_pad_mask).sum().item()
+
+        return loss, n_correct
+    
+     
+    def train_mle_epoch(self, training_data, model, optimizer, epoch, tb=None):
+        model.train()
+        total_loss = 0.0
+        n_char_total = 0.0
+        n_char_correct = 0.0
+        for batch_idx, batch in enumerate(tqdm(training_data, mininterval=2, leave=False)):
+            batch_qs, batch_as = map(lambda x: x.to(self.device), batch)
+            trg_as = batch_as[:, 1:]
+            optimizer.zero_grad()
+            pred_logits = model(batch_qs, batch_as[:, :-1])
+            pred_logits = pred_logits.view(-1, pred_logits.size(2))
+            loss, n_correct = self.compute_mle_loss(pred_logits, trg_as, smoothing=False)
+            loss.backward()
+            
+            optimizer.step()
+            
+            total_loss += loss.item()
+            
+            non_pad_mask = trg_as.ne(PAD)
+            n_char = non_pad_mask.sum().item()
+            n_char_total += n_char
+            n_char_correct += n_correct
+            
+            if tb is not None and batch_idx % log_interval == 0:
+                tb.add_scalars(
+                    {
+                        "loss_per_char" : total_loss / n_char_total,
+                        "accuracy": n_char_correct / n_char_total,
+                    },
+                group="mle_train",
+                sub_group="batch",
+                global_step = epoch*len(training_data)+batch_idx)
+
+        loss_per_char = total_loss / n_char_total
+        accuracy = n_char_correct / n_char_total
+        
+        if tb is not None:
+            tb.add_scalars(
+                {
+                    "loss_per_char" : loss_per_char,
+                    "accuracy" : accuracy,
+                },
+                group="train",
+                sub_group="epoch",
+                global_step=epoch
+            )    
+
     def train_policy_epoch(self, training_data, model, gamma, optimizer):
 
         model.train()
