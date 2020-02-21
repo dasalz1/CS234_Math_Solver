@@ -243,6 +243,7 @@ class Trainer:
 		model.train()
 		ignore_index = model.action_transformer.trg_pad_idx
 		all_rewards = []
+		all_value_losses = []
 	#     sample batch of questions and answers
 		for batch_idx, batch in enumerate(tqdm(training_data, mininterval=2, leave=False)):
 			batch_qs, batch_as = map(lambda x: x.to(self.device), batch)
