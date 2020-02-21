@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from transformer.Models import Transformer
+from transformer.Models import Transformer, PositionalEncoding
 import numpy as np
 
 from parameters import VOCAB_SIZE, MAX_ANSWER_SIZE, MAX_QUESTION_SIZE
@@ -12,7 +12,7 @@ class Policy_Network(nn.Module):
                  value_dimension = 64, dropout = 0.1, n_position = 160, 
                  d_char_vec = 512, inner_dimension = 2048, 
                  n_trg_position = MAX_ANSWER_SIZE, n_src_position = MAX_QUESTION_SIZE, padding = 1,
-                critic_num_layers=4, critic_kernel_size=4, critic_padding=1, model=None):
+                critic_num_layers=4, critic_kernel_size=4, critic_padding=1, model=None, share_embedding_layers=False):
         
         super(Policy_Network, self).__init__()
         
@@ -23,12 +23,17 @@ class Policy_Network(nn.Module):
                                trg_emb_prj_weight_sharing=True, emb_src_trg_weight_sharing=True) if model == None else model
         
         
+        critic_src_embedding = self.action_transformer.encoder.src_word_emb if share_embedding_layers else nn.Embedding(VOCAB_SIZE + 1, d_char_vec, padding_idx=self.action_transformer.src_pad_idx)
+        critic_trg_embedding = self.action_transformer.deocder.trg_word_emb if share_embedding_layers else nn.Embedding(VOCAB_SIZE + 1, d_char_vec, padding_idx=self.action_transformer.trg_pad_idx)
+        critic_src_position = self.action_transformer.encoder.position_enc if share_embedding_layers else PositionalEncoding(d_char_vec, n_src_position)
+        critic_trg_position = self.action_transformer.decoder.position_enc if share_embedding_layers else PositionalEncoding(d_char_vec, n_trg_position)
+
         self.value_head = Critic(conv_layers=critic_num_layers, d_char_vec=d_char_vec, kernel_size=critic_kernel_size,
                                 n_vocab=VOCAB_SIZE+1, dropout=dropout, padding=critic_padding, 
-                                src_embedding=self.action_transformer.encoder.src_word_emb, 
-                                trg_embedding=self.action_transformer.decoder.trg_word_emb, 
-                                 src_position_enc=self.action_transformer.encoder.position_enc, 
-                                 trg_position_enc=self.action_transformer.decoder.position_enc)
+                                src_embedding=critic_src_embedding, 
+                                trg_embedding=critic_trg_embedding, 
+                                 src_position_enc=critic_src_position, 
+                                 trg_position_enc=critic_trg_position)
         
     def forward(self, src_seq, trg_seq):
         
