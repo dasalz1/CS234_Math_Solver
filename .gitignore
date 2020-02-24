@@ -1,4 +1,5 @@
-
+*.DS_STORE
+/.idea/
 mathematics_dataset/
 pytorch_math_dataset/
 mathematics_dataset-v1.0/
