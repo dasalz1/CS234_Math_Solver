@@ -11,10 +11,11 @@ from dataset import PAD, UNK, BOS, EOS
 
 
 class Trainer:
-  def __init__(self, use_mle, device='cpu'):
+  def __init__(self, use_mle, use_rl, device='cpu'):
     self.device=device
     self.eps = np.finfo(np.float32).eps.item()
     self.use_mle = use_mle
+    self.use_rl = use_rl
   
   def calc_reward(self, actions_pred, actions, ignore_index=0):
     # 1 if character is correct
@@ -118,16 +119,17 @@ class Trainer:
       all_value_losses = []
       for batch_idx, batch in enumerate(tqdm(training_data, mininterval=2, leave=False)):
         batch_qs, batch_as = map(lambda x: x.to(self.device), batch)
-        print(optimizer)
         optimizer.zero_grad()
 
-        if not self.use_mle:
+        if self.use_rl:
           policy_losses, value_losses, batch_rewards = self.policy_batch_loss(batch_qs, batch_as, model, gamma=0.9)
 
         mle_loss, n_correct, n_char = self.mle_batch_loss(batch_qs, batch_as, model.module.action_transformer)
 
         if self.use_mle:
           loss = mle_loss
+        elif self.use_rl:
+          loss = policy_losses + value_losses
         else:
           loss = (1-eta)*policy_losses + value_losses + eta*mle_loss
 
@@ -137,7 +139,7 @@ class Trainer:
         n_char_total += n_char
         n_char_correct += n_correct
         total_mle_loss += mle_loss
-        if not self.use_mle:
+        if self.use_rl:
           all_rewards.append(batch_rewards)
           all_value_losses.append(value_losses)
 
@@ -150,7 +152,7 @@ class Trainer:
       loss_per_char = total_loss / n_char_total
       accuracy = n_char_correct / n_char_total
 
-      if not self.use_mle:
+      if self.use_rl:
         average_rewards = np.mean(all_rewards)
         average_value_loss = np.mean(all_value_losses)
       

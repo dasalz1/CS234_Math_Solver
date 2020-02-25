@@ -9,7 +9,8 @@ import torch
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--use_mle", default=False, action='store_true')
+parser.add_argument("--use_mle_only", default=False, action='store_true')
+parser.add_argument("--use_rl_only", default=False, action='store_true')
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -29,7 +30,7 @@ train_loader = data.DataLoader(
     collate_fn=question_answer_to_batch_collate_fn)
 
 model = torch.nn.DataParallel(Policy_Network().to(device))
-trainer = Trainer(args.use_mle, device)
+trainer = Trainer(args.use_mle_only, args.use_rl_only, device)
 optimizer = optim.Adam(model.parameters(), lr=1e-2)
 
 trainer.train(train_loader, model, optimizer)
