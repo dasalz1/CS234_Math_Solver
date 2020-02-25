@@ -230,7 +230,7 @@ class Trainer:
 			n_char_correct += n_correct
 			
 			if tb is not None and batch_idx % log_interval == 0:
-				self.tb_mle_batch(tb, total_mle_loss, n_char_total, n_char_correct, epoch, batch_idx, len(training_data))
+				self.tb_mle_batch(tb, total_loss, n_char_total, n_char_correct, epoch, batch_idx, len(training_data))
 
 		loss_per_char = total_loss / n_char_total
 		accuracy = n_char_correct / n_char_total
