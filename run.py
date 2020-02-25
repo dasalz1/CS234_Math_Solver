@@ -12,9 +12,8 @@ train_loader = data.DataLoader(
     ds, batch_size=128, shuffle=True,#num_workers=4,
     collate_fn=question_answer_to_batch_collate_fn)
 
-
 model = Policy_Network()
 trainer = Trainer()
 optimizer = optim.Adam(model.parameters(), lr=1e-2)
 
-trainer.train_policy_epoch(train_loader, model, .99, optimizer)
+trainer.train(train_loader, model, .99, optimizer)

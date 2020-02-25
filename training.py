@@ -103,7 +103,7 @@ class Trainer:
 			global_step=epoch
 		)
 
-	def train(self, training_data, model, optimizer, tb=None, epochs=20, log_inteval=100):
+	def train(self, training_data, model, optimizer, tb=None, epochs=20, log_interval=100):
 		model.train()
 		ignore_index = model.action_transformer.trg_pad_idx
 		eta = 0.95
