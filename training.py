@@ -153,7 +153,7 @@ class Trainer:
 		trg_as = batch_as[:, 1:]
 		pred_logits = model(batch_qs, batch_as[:, :-1])
 		pred_logits = pred_logits.view(-1, pred_logits.size(2))
-		loss, n_correct = self.compute_mle_loss(pred_logits, trg_as, smoothing=False)
+		loss, n_correct = self.compute_mle_loss(pred_logits, trg_as, smoothing=True)
 		
 		non_pad_mask = trg_as.ne(PAD)
 		n_char = non_pad_mask.sum().item()
@@ -217,7 +217,7 @@ class Trainer:
 			optimizer.zero_grad()
 			pred_logits = model(batch_qs, batch_as[:, :-1])
 			pred_logits = pred_logits.view(-1, pred_logits.size(2))
-			loss, n_correct = self.compute_mle_loss(pred_logits, trg_as, smoothing=False)
+			loss, n_correct = self.compute_mle_loss(pred_logits, trg_as, smoothing=True)
 			loss.backward()
 			
 			optimizer.step()
