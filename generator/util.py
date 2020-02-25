@@ -33,7 +33,9 @@ def _filter_and_flatten(filter, modules_):
       if isinstance(module_or_function, dict):
         add(module_or_function, full_name)
       else:
-        if filter not in full_name:
+#         print(full_name)
+        if full_name not in filter:
+#         if filter not in full_name:
           continue
         flat[full_name] = module_or_function
 

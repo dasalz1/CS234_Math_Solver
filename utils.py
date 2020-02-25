@@ -31,10 +31,9 @@ def question_answer_to_batch_collate_fn(qas):
 
     max_q_len = max(len(qa["q_enc"]) for qa in qas)
     max_a_len = max(len(qa["a_enc"]) for qa in qas)
-
+ 
     batch_qs = []
     batch_as = []
-    batch_pos = []
     for qa in qas:
       batch_qs.append(np.pad(qa["q_enc"], (0, max_q_len - len(qa["q_enc"])), mode='constant', constant_values=PAD))
       batch_as.append(np.pad(qa["a_enc"], (0, max_a_len - len(qa["a_enc"])), mode='constant', constant_values=PAD))

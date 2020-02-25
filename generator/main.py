@@ -20,9 +20,9 @@ flags.DEFINE_string(
     "",
     "restrict to modules containing this string (ex. `algebra__polynomial_roots_composed).`",
 )
-flags.DEFINE_integer("num_examples", 10, "Num of examples to generate.")
+flags.DEFINE_integer("num_examples", 128, "Num of examples to generate.")
 flags.DEFINE_bool(
-    "print_results", False, "Should print question-answer pairs (or not)."
+    "print_results", True, "Should print question-answer pairs (or not)."
 )
 
 

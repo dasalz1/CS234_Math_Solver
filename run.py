@@ -1,4 +1,4 @@
-from dataset import MathDatasetManager, question_answer_to_batch_collate_fn
+from old_dataset import MathDatasetManager, question_answer_to_batch_collate_fn
 from transformer.Models import PositionalEncoding
 from torch.utils import data
 from A3C import Policy_Network
