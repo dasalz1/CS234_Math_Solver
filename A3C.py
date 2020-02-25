@@ -36,7 +36,6 @@ class Policy_Network(nn.Module):
                                  trg_position_enc=critic_trg_position)
         
     def forward(self, src_seq, trg_seq):
-        
         action_prob = self.action_transformer(src_seq, trg_seq)
         action_prob = action_prob[:, -1, :]
         state_values = self.value_head(src_seq, trg_seq)
@@ -64,8 +63,8 @@ class Critic(nn.Module):
     def forward(self, src_seq, trg_seq):
         
         batch_sz, max_src_pos, max_trg_pos = src_seq.shape[0], src_seq.shape[1], trg_seq.shape[1]
-        src_seq_pad = torch.cat((src_seq, torch.zeros((batch_sz, MAX_QUESTION_SIZE-max_src_pos), dtype=torch.int64)), dim=1)
-        trg_seq_pad = torch.cat((trg_seq, torch.zeros((batch_sz, MAX_ANSWER_SIZE-max_trg_pos), dtype=torch.int64)), dim=1)
+        src_seq_pad = torch.cat((src_seq, torch.zeros((batch_sz, MAX_QUESTION_SIZE-max_src_pos), dtype=torch.int64).to(src_seq.device)), dim=1)
+        trg_seq_pad = torch.cat((trg_seq, torch.zeros((batch_sz, MAX_ANSWER_SIZE-max_trg_pos), dtype=torch.int64).to(trg_seq.device)), dim=1)
         src_emb = self.dropout(self.src_position_enc(self.src_word_emb(src_seq_pad)))
         trg_emb = self.dropout(self.trg_position_enc(self.trg_word_emb(trg_seq_pad)))
         
