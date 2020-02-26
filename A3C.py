@@ -8,7 +8,7 @@ from parameters import VOCAB_SIZE, MAX_ANSWER_SIZE, MAX_QUESTION_SIZE
 
 
 class Policy_Network(nn.Module):
-    def __init__(self, num_layers = 6, num_heads = 8, key_dimension = 64, 
+    def __init__(self, num_layers = 2, num_heads = 4, key_dimension = 64, 
                  value_dimension = 64, dropout = 0.1, n_position = 160, 
                  d_char_vec = 512, inner_dimension = 2048, 
                  n_trg_position = MAX_ANSWER_SIZE, n_src_position = MAX_QUESTION_SIZE, padding = 1,

@@ -6,7 +6,8 @@ from torch.distributions import Categorical
 import numpy as np
 from tqdm import tqdm
 from parameters import VOCAB_SIZE, MAX_ANSWER_SIZE, MAX_QUESTION_SIZE
-from dataset import PAD, UNK, BOS, EOS
+#from dataset import PAD, UNK, BOS, EOS
+from dataset import PAD
 
 
 
@@ -16,6 +17,23 @@ class Trainer:
     self.eps = np.finfo(np.float32).eps.item()
     self.use_mle = use_mle
     self.use_rl = use_rl
+
+  def save_checkpoint(epoch, model, optimizer, suffix="default"):
+    torch.save({
+      'epoch': epoch,
+      'model': model,
+      'optimizer': optimizer
+      }, "checkpoint-{}.pth".format(suffix))
+
+  def from_checkpoint_if_exists(model, optimizer):
+    epoch = 0
+    if os.path.isfile("checkpoint.pth"):
+      print("Loading existing checkpoint...")
+      checkpoint = torch.load("checkpoint.pth")
+      epoch = checkpoint['epoch']
+      model.load_state_dict(checkpoint['model'])
+      optimizer.load_state_dict(checkpoint['optimizer'])
+    return epoch, model, optimizer
   
   def calc_reward(self, actions_pred, actions, ignore_index=0):
     # 1 if character is correct
@@ -32,7 +50,6 @@ class Trainer:
       (all_returns - all_returns.mean(dim=-1).view(-1, 1)) / (all_returns.std(dim=-1).view(-1, 1) + self.eps)
   
     return all_returns
-
 
   def compute_mle_loss(self, pred, target, smoothing, log=False):
     def compute_loss(pred, target, smoothing):
@@ -105,13 +122,15 @@ class Trainer:
       global_step=epoch
     )
 
-  def train(self, training_data, model, optimizer, tb=None, epochs=20, log_interval=100):
+  def train(self, training_data, model, optimizer, tb=None, epochs=20, log_interval=100, checkpoint_interval=100):
+    
+    curr_epoch, model, optimizer = self.from_checkpoint_if_exists(model, optimizer)
     model.train()
     ignore_index = model.module.action_transformer.trg_pad_idx
     eta = 0.95
 
 
-    for epoch in range(epochs):
+    for epoch in range(curr_epoch, epochs):
       total_mle_loss = 0.0
       n_char_total = 0.0
       n_char_correct = 0.0
@@ -147,6 +166,9 @@ class Trainer:
           self.tb_mle_batch(tb, total_mle_loss, n_char_total, n_char_correct, epoch, batch_idx, len(training_data))
           if not self.use_mle:
             self.tb_policy_batch(tb, batch_rewards, value_losses, epoch, batch_idx, len(training_data))
+        
+        if batch_idx != 0 and batch_idx % checkpoint_interval == 0:
+          self.save_checkpoint(epoch, model, optimizer, suffix=str(batch_idx))
       
       print("average rewards " + str(all_rewards))  
       loss_per_char = total_loss / n_char_total
@@ -174,11 +196,11 @@ class Trainer:
   def policy_batch_loss(self, batch_qs, batch_as, model, gamma):
     batch_size, max_len_sequence = batch_qs.shape[0], batch_as.shape[1]
     current_as = batch_as[:, :1]
-    complete = torch.ones((batch_size, 1))
-    rewards = torch.zeros((batch_size, 0))
-    values = torch.zeros((batch_size, 0))
-    log_probs = torch.zeros((batch_size, 0))
-    advantages_mask = torch.ones((batch_size, 0))
+    complete = torch.ones((batch_size, 1)).to(self.device)
+    rewards = torch.zeros((batch_size, 0)).to(self.device)
+    values = torch.zeros((batch_size, 0)).to(self.device)
+    log_probs = torch.zeros((batch_size, 0)).to(self.device)
+    advantages_mask = torch.ones((batch_size, 0)).to(self.device)
     for t in range(1, max_len_sequence):
       advantages_mask = torch.cat((advantages_mask, complete), dim=1)
       action_probs, curr_values = model(batch_qs, current_as)
