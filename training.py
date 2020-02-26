@@ -18,14 +18,14 @@ class Trainer:
     self.use_mle = use_mle
     self.use_rl = use_rl
 
-  def save_checkpoint(epoch, model, optimizer, suffix="default"):
+  def save_checkpoint(self, epoch, model, optimizer, suffix="default"):
     torch.save({
       'epoch': epoch,
       'model': model,
       'optimizer': optimizer
       }, "checkpoint-{}.pth".format(suffix))
 
-  def from_checkpoint_if_exists(model, optimizer):
+  def from_checkpoint_if_exists(self, model, optimizer):
     epoch = 0
     if os.path.isfile("checkpoint.pth"):
       print("Loading existing checkpoint...")
