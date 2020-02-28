@@ -43,6 +43,8 @@ train_loader = data.DataLoader(
     ds, batch_size=1024, shuffle=True,#num_workers=4,
     collate_fn=question_answer_to_batch_collate_fn, num_workers=0)
 
+num_iterations = len(train_loader)
+
 model = torch.nn.DataParallel(Policy_Network().to(device))
 trainer = Trainer(args.use_mle_only, args.use_rl_only, device)
 optimizer = optim.Adam(model.parameters(), lr=6e-4, betas=(0.9, 0.995), eps=1e-8)
