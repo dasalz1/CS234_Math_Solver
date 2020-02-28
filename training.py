@@ -147,8 +147,6 @@ class Trainer:
       n_char_correct = 0.0
       all_rewards = []
       all_value_losses = []
-      print(len(training_data))
-      exit()
       for batch_idx, batch in enumerate(tqdm(training_data, mininterval=2, leave=False)):
         batch_qs, batch_as = map(lambda x: x.to(self.device), batch)
         optimizer.zero_grad()
