@@ -8,6 +8,7 @@ from tqdm import tqdm
 from parameters import VOCAB_SIZE, MAX_ANSWER_SIZE, MAX_QUESTION_SIZE
 #from dataset import PAD, UNK, BOS, EOS
 from dataset import PAD
+import os
 
 
 
@@ -18,14 +19,22 @@ class Trainer:
     self.use_mle = use_mle
     self.use_rl = use_rl
 
-  def save_checkpoint(self, epoch, model, optimizer, suffix="default"):
-    torch.save({
-      'epoch': epoch,
-      'model': model,
-      'optimizer': optimizer
-      }, "checkpoint-{}.pth".format(suffix))
+  def save_checkpoint(self, epoch, model, optimizer, scheduler, suffix="default"):
+    if scheduler:
+      torch.save({
+        'epoch': epoch,
+        'model': model.state_dict(),
+        'optimizer': optimizer.state_dict(),
+        'scheduler': scheduler.state_dict()
+        }, "checkpoint-{}.pth".format(suffix))
+    else:
+      torch.save({
+        'epoch': epoch,
+        'model': model.state_dict(),
+        'optimizer': optimizer.state_dict()
+        }, "checkpoint-{}.pth".format(suffix))
 
-  def from_checkpoint_if_exists(self, model, optimizer):
+  def from_checkpoint_if_exists(self, model, optimizer, scheduler):
     epoch = 0
     if os.path.isfile("checkpoint.pth"):
       print("Loading existing checkpoint...")
@@ -33,7 +42,9 @@ class Trainer:
       epoch = checkpoint['epoch']
       model.load_state_dict(checkpoint['model'])
       optimizer.load_state_dict(checkpoint['optimizer'])
-    return epoch, model, optimizer
+      if scheduler and 'scheduler' in checkpoint:
+        scheduler.load_state_dict(checkpoint['scheduler'])
+    return epoch, model, optimizer, scheduler
   
   def calc_reward(self, actions_pred, actions, ignore_index=0):
     # 1 if character is correct
@@ -122,9 +133,9 @@ class Trainer:
       global_step=epoch
     )
 
-  def train(self, training_data, model, optimizer, tb=None, epochs=20, log_interval=100, checkpoint_interval=100):
+  def train(self, training_data, model, optimizer, scheduler=None, tb=None, epochs=20, log_interval=100, checkpoint_interval=10000):
     
-    curr_epoch, model, optimizer = self.from_checkpoint_if_exists(model, optimizer)
+    curr_epoch, model, optimizer, scheduler = self.from_checkpoint_if_exists(model, optimizer, scheduler)
     model.train()
     ignore_index = model.module.action_transformer.trg_pad_idx
     eta = 0.95
@@ -136,6 +147,8 @@ class Trainer:
       n_char_correct = 0.0
       all_rewards = []
       all_value_losses = []
+      print(len(training_data))
+      exit()
       for batch_idx, batch in enumerate(tqdm(training_data, mininterval=2, leave=False)):
         batch_qs, batch_as = map(lambda x: x.to(self.device), batch)
         optimizer.zero_grad()
@@ -153,7 +166,11 @@ class Trainer:
           loss = (1-eta)*policy_losses + value_losses + eta*mle_loss
 
         loss.backward()
+        # clipping gradients
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 0.1)
         optimizer.step()
+        if scheduler:
+            scheduler.step()
 
         n_char_total += n_char
         n_char_correct += n_correct
@@ -168,7 +185,7 @@ class Trainer:
             self.tb_policy_batch(tb, batch_rewards, value_losses, epoch, batch_idx, len(training_data))
         
         if batch_idx != 0 and batch_idx % checkpoint_interval == 0:
-          self.save_checkpoint(epoch, model, optimizer, suffix=str(batch_idx))
+          self.save_checkpoint(epoch, model, optimizer, scheduler, suffix=str(batch_idx))
       
       print("average rewards " + str(all_rewards))  
       loss_per_char = total_loss / n_char_total
@@ -254,7 +271,6 @@ class Trainer:
       loss.backward()
       
       optimizer.step()
-      
       total_loss += loss.item()
       
       non_pad_mask = trg_as.ne(PAD)
