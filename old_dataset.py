@@ -161,6 +161,18 @@ class MathDatasetManager(data.Dataset):
         print(f"adding category {category}/../{typ}")
         ds = self._build_datasets_from_category(category, typ, max_elements=max_elements)
         return data.ConcatDataset(ds)
+
+    def build_dataset_from_category_all_types(self, category, types, max_elements=None):
+        """Build a dataset for all modules in a category with all types"""
+        ds = []
+        for typ in types:
+            try:
+                print(f"adding category {category}/../{typ}")
+                dss = self._build_datasets_from_category(category, typ, max_elements=max_elements)
+                ds.extend(dss)
+            except:
+                continue
+        return data.ConcatDataset(ds)
     
     def build_dataset_from_categories(self, categories, typ, max_elements=None):
         """Build a dataset for all modules in several categories"""

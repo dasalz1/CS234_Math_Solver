@@ -6,6 +6,8 @@ import transformer.Models
 import transformer.Translator
 import transformer.Optim
 
+__version__ = "2.5.1"
+
 __all__ = [
     transformer.Constants, transformer.Modules, transformer.Layers,
     transformer.SubLayers, transformer.Models, transformer.Optim,

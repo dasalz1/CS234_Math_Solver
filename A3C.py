@@ -1,7 +1,10 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from transformer.Models import Transformer, PositionalEncoding
+# from transformer.Models import Transformer, PositionalEncoding
+from transformer.bart import BartModel
+from transformer.configuration_bart import BartConfig
+from transformer.Constants import PAD, EOS
 import numpy as np
 
 from parameters import VOCAB_SIZE, MAX_ANSWER_SIZE, MAX_QUESTION_SIZE
@@ -16,17 +19,33 @@ class Policy_Network(nn.Module):
         
         super(Policy_Network, self).__init__()
         
-        self.action_transformer = Transformer(n_src_vocab=VOCAB_SIZE + 1, n_trg_vocab=VOCAB_SIZE+1, src_pad_idx=0, trg_pad_idx=0,
-                               d_char_vec=d_char_vec, d_model=d_char_vec, d_inner=inner_dimension, n_layers=num_layers,
-                               n_head=num_heads, d_k=key_dimension, d_v=value_dimension, dropout=dropout,
-                               n_trg_position=n_trg_position, n_src_position=n_src_position,
-                               trg_emb_prj_weight_sharing=True, emb_src_trg_weight_sharing=True) if model == None else model
+        # self.action_transformer = Transformer(n_src_vocab=VOCAB_SIZE + 1, n_trg_vocab=VOCAB_SIZE+1, src_pad_idx=0, trg_pad_idx=0,
+        #                        d_char_vec=d_char_vec, d_model=d_char_vec, d_inner=inner_dimension, n_layers=num_layers,
+        #                        n_head=num_heads, d_k=key_dimension, d_v=value_dimension, dropout=dropout,
+        #                        n_trg_position=n_trg_position, n_src_position=n_src_position,
+        #                        trg_emb_prj_weight_sharing=True, emb_src_trg_weight_sharing=True) if model == None else model
         
+        bart_config = BartConfig(
+            vocab_size=VOCAB_SIZE+1,
+            pad_token_id=PAD,
+            eos_token_id=EOS,
+            d_model=d_char_vec,
+            encoder_ffn_dim=inner_dimension,
+            encoder_layers=num_layers,
+            encoder_attention_heads=num_heads,
+            decoder_ffn_dim=inner_dimension,
+            decoder_layers=num_layers,
+            decoder_attention_heads=num_heads,
+            dropout=dropout,
+            max_encoder_position_embeddings=n_src_position,
+            max_decoder_position_embeddings=n_trg_position
+        )
+        self.action_transformer = BartModel(bart_config)
         
-        critic_src_embedding = self.action_transformer.encoder.src_word_emb if share_embedding_layers else nn.Embedding(VOCAB_SIZE + 1, d_char_vec, padding_idx=self.action_transformer.src_pad_idx)
-        critic_trg_embedding = self.action_transformer.deocder.trg_word_emb if share_embedding_layers else nn.Embedding(VOCAB_SIZE + 1, d_char_vec, padding_idx=self.action_transformer.trg_pad_idx)
-        critic_src_position = self.action_transformer.encoder.position_enc if share_embedding_layers else PositionalEncoding(d_char_vec, n_src_position)
-        critic_trg_position = self.action_transformer.decoder.position_enc if share_embedding_layers else PositionalEncoding(d_char_vec, n_trg_position)
+        critic_src_embedding = self.action_transformer.shared
+        critic_trg_embedding = self.action_transformer.shared
+        critic_src_position = self.action_transformer.encoder.embed_positions
+        critic_trg_position = self.action_transformer.decoder.embed_positions
 
         self.value_head = Critic(conv_layers=critic_num_layers, d_char_vec=d_char_vec, kernel_size=critic_kernel_size,
                                 n_vocab=VOCAB_SIZE+1, dropout=dropout, padding=critic_padding, 
@@ -36,7 +55,7 @@ class Policy_Network(nn.Module):
                                  trg_position_enc=critic_trg_position)
         
     def forward(self, src_seq, trg_seq):
-        action_prob = self.action_transformer(src_seq, trg_seq)
+        action_prob = self.action_transformer(input_ids=src_seq, decoder_input_ids=trg_seq)
         action_prob = action_prob[:, -1, :]
         state_values = self.value_head(src_seq, trg_seq)
         

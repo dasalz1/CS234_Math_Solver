@@ -9,8 +9,7 @@ from parameters import VOCAB_SIZE, MAX_ANSWER_SIZE, MAX_QUESTION_SIZE
 #from dataset import PAD, UNK, BOS, EOS
 from dataset import PAD
 import os
-
-
+from transformers.optimization import AdamW, get_cosine_schedule_with_warmup
 
 class Trainer:
   def __init__(self, use_mle, use_rl, device='cpu'):
@@ -137,9 +136,8 @@ class Trainer:
     
     curr_epoch, model, optimizer, scheduler = self.from_checkpoint_if_exists(model, optimizer, scheduler)
     model.train()
-    ignore_index = model.module.action_transformer.trg_pad_idx
+    # ignore_index = model.module.action_transformer.trg_pad_idx
     eta = 0.95
-
 
     for epoch in range(curr_epoch, epochs):
       total_mle_loss = 0.0
@@ -147,6 +145,10 @@ class Trainer:
       n_char_correct = 0.0
       all_rewards = []
       all_value_losses = []
+
+      optimizer = AdamW(model.parameters(), lr=6e-4)
+      scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=40000, num_training_steps=len(training_data))
+      
       for batch_idx, batch in enumerate(tqdm(training_data, mininterval=2, leave=False)):
         batch_qs, batch_as = map(lambda x: x.to(self.device), batch)
         optimizer.zero_grad()
@@ -186,7 +188,7 @@ class Trainer:
           self.save_checkpoint(epoch, model, optimizer, scheduler, suffix=str(batch_idx))
       
       print("average rewards " + str(all_rewards))  
-      loss_per_char = total_loss / n_char_total
+      loss_per_char = total_mle_loss / n_char_total
       accuracy = n_char_correct / n_char_total
 
       if self.use_rl:
@@ -199,8 +201,8 @@ class Trainer:
 
   def mle_batch_loss(self, batch_qs, batch_as, model):
     trg_as = batch_as[:, 1:]
-    pred_logits = model(batch_qs, batch_as[:, :-1])
-    pred_logits = pred_logits.view(-1, pred_logits.size(2))
+    pred_logits = model(input_ids=batch_qs, decoder_input_ids=batch_as[:, :-1])
+    pred_logits = pred_logits.reshape(-1, pred_logits.size(2))
     loss, n_correct = self.compute_mle_loss(pred_logits, trg_as, smoothing=True)
     
     non_pad_mask = trg_as.ne(PAD)
@@ -218,7 +220,7 @@ class Trainer:
     advantages_mask = torch.ones((batch_size, 0)).to(self.device)
     for t in range(1, max_len_sequence):
       advantages_mask = torch.cat((advantages_mask, complete), dim=1)
-      action_probs, curr_values = model(batch_qs, current_as)
+      action_probs, curr_values = model(input_ids=batch_qs, decoder_input_ids=current_as)
       m = Categorical(F.softmax(action_probs, dim=-1))
       actions = m.sample().contiguous().view(-1, 1)
       
@@ -263,7 +265,7 @@ class Trainer:
       batch_qs, batch_as = map(lambda x: x.to(self.device), batch)
       trg_as = batch_as[:, 1:]
       optimizer.zero_grad()
-      pred_logits = model(batch_qs, batch_as[:, :-1])
+      pred_logits = model(input_ids=batch_qs, decoder_input_ids=batch_as[:, :-1])
       pred_logits = pred_logits.view(-1, pred_logits.size(2))
       loss, n_correct = self.compute_mle_loss(pred_logits, trg_as, smoothing=True)
       loss.backward()
@@ -303,7 +305,7 @@ class Trainer:
       advantages_mask = torch.ones((batch_size, 0))
       for t in range(1, max_len_sequence):
         advantages_mask = torch.cat((advantages_mask, complete), dim=1)
-        action_probs, curr_values = model(batch_qs, current_as)
+        action_probs, curr_values = model(input_ids=batch_qs, decoder_input_ids=current_as)
         m = Categorical(F.softmax(action_probs, dim=-1))
         actions = m.sample().contiguous().view(-1, 1)
         
