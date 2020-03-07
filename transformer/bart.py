@@ -844,7 +844,7 @@ class BartModel(PretrainedBartModel):
         # Attention and hidden_states will be [] or None if they aren't needed
         decoder_outputs = _filter_out_falsey_values(decoder_outputs)  # type: tuple
         assert isinstance(decoder_outputs[0], torch.Tensor)
-        return decoder_outputs[0]
+        return self.decoder_proj(decoder_outputs[0])
 
     def get_input_embeddings(self):
         return self.shared
