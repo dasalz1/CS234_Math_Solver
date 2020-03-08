@@ -1,0 +1,12 @@
+absl-py>=0.1.0
+numpy>=1.10
+six
+sympy>=1.2
+mathematics-dataset
+panda
+torch
+tqdm
+tensorboardX
+boto3
+filelock
+transformers==2.4.1

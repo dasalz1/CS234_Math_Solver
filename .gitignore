@@ -1,5 +1,7 @@
 *.DS_STORE
 /.idea/
+poetry.lock
+pyproject.toml
 mathematics_dataset/
 pytorch_math_dataset/
 mathematics_dataset-v1.0/

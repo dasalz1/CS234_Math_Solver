@@ -196,8 +196,10 @@ class Trainer:
         average_value_loss = np.mean(all_value_losses)
       
       if tb is not None:
-        self.tb_mle_epoch(tb, loss_per_char, accuracy, epoch)
-        self.tb_policy_epoch(tb, average_rewards, average_value_loss, epoch)
+        if self.use_mle:
+          self.tb_mle_epoch(tb, loss_per_char, accuracy, epoch)
+        if self.use_rl:
+          self.tb_policy_epoch(tb, average_rewards, average_value_loss, epoch)
 
   def mle_batch_loss(self, batch_qs, batch_as, model):
     trg_as = batch_as[:, 1:]
@@ -349,7 +351,6 @@ class Trainer:
 
       if tb is not None and batch_idx % log_interval == 0:
         self.tb_policy_batch(tb, batch_rewards, value_losses, epoch, batch_idx, len(training_data))
-    
 
     average_rewards = np.mean(all_rewards)
     average_value_loss = np.mean(all_value_losses)

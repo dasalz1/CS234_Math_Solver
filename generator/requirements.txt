@@ -1,5 +1,0 @@
-absl-py>=0.1.0
-numpy>=1.10
-six
-sympy>=1.2
-mathematics-dataset

@@ -68,6 +68,29 @@ class MetaGeneratorDataset(Dataset):
         support_ans = torch.LongTensor(pd.DataFrame(support_ans).fillna(PAD).values)
         
         return support_ques, support_ans, query_ques, query_ans
+
+class NaïveCurriculumDataset(Dataset):
+
+    def __init__(self, categories=["algebra", "probability"], num_iterations=12, batch_size=4):
+        self.categories = categories
+        self.num_iterations = int(num_iterations * batch_size)
+        self.current_iteration = 0
+
+    def __len__(self):
+        return self.num_iterations
+
+    def __getitem__(self, idx):
+        difficulty = self.current_iteration / self.num_iterations
+        initial_modules = modules.train(_make_entropy_fn(difficulty, 1))
+        filtered_modules = _filter_and_flatten(self.categories, initial_modules)
+        self.sampled_modules = list(six.iteritems(filtered_modules))
+
+        problem = sample_from_module(self.sampled_modules[np.random.randint(0, len(self.sampled_modules), (1))[0]][1], show_dropped=False)[0]
+        # converts to tokens and adds BOS and EOS tokens
+        ques, anws = np_encode_string(str(problem[0])), np_encode_string(str(problem[1]))
+
+        self.current_iteration += 1
+        return ques, anws
         
 
 
