@@ -11,12 +11,13 @@ import numpy as np
 import pandas as pd
 from utils import save_checkpoint, from_checkpoint_if_exists, tb_mle_meta_batch
 import os
+from copy import deepcopy
 
 PAD_IDX = 0
 
 class Learner(nn.Module):
 
-	def __init__(self, process_id, gpu='cpu', world_size=4, optimizer=optim.Adam, optimizer_sparse=optim.SparseAdam, optim_params=(1e-3, (0.9, 0.995), 1e-8), model_params=None):
+	def __init__(self, process_id, gpu='cpu', world_size=4, total_forward=5, optimizer=optim.Adam, optimizer_sparse=optim.SparseAdam, optim_params=(1e-3, (0.9, 0.995), 1e-8), model_params=None):
 		super(Learner, self).__init__()
 
 		self.model = Transformer(*model_params)
@@ -24,12 +25,16 @@ class Learner(nn.Module):
 		if process_id == 0:
 			optim_params = (self.model.parameters(),) + optim_params
 			self.optimizer = optimizer(*optim_params)
+			self.forward_passes = 0
 
 		self.meta_optimizer = optim.SGD(self.model.parameters(), 0.1)
 		self.device='cuda:'+str(process_id) if gpu is not 'cpu' else gpu
 		self.process_id = process_id
 		self.num_iter = 0
 		self.world_size = world_size
+		self.total_forward = total_forward
+		self.original_state_dict = {}
+
 
 		# if process == 0:
 			# optim_params = optim_params.insert(0, self.model_parameters())
@@ -108,7 +113,8 @@ class Learner(nn.Module):
 			dist.barrier()
 			data_event.clear()
 
-			original_state_dict = {}
+			if self.process_id == 0 and self.num_iter != 0 and self.num_iter % checkpoint_interval == 0:
+				save_checkpoint(0, self.model, self.optimizer, suffix=str(self.num_iter))
 
 			# broadcast weights from master process to all others and save them to a detached dictionary for loadinglater
 			for k, v in self.model.state_dict().items():
@@ -148,19 +154,29 @@ class Learner(nn.Module):
 			dist.reduce(acc, 0, op=dist.ReduceOp.SUM)
 
 
-
-			if self.process_id == 0 and tb is not None and self.num_iter % log_interval == 0:
-				tb_mle_meta_batch(tb, loss.item()/self.world_size, acc/self.world_size, self.num_iter)
-			
-			if self.process_id == 0 and self.num_iter != 0 and self.num_iter % checkpoint_interval == 0:
-				save_checkpoint(0, self.model, self.optimizer, suffix=str(self.num_iter))
-
 			for idx in range(len(all_grads)):
 				dist.reduce(all_grads[idx].data, 0, op=dist.ReduceOp.SUM, async_op=True)
 
+			if self.process_id == 0 and tb is not None and self.num_iter % log_interval == 0:
+				tb_mle_meta_batch(tb, loss.item()/self.world_size, acc/self.world_size, self.num_iter)
+
 			if self.process_id == 0:
 				self.num_iter += 1
-				self._write_grads(original_state_dict, all_grads, (query_x, query_y))
+
+				if self.forward_passes == 0:
+					temp_grads = list(deepcopy(all_grads))
+				else:
+					for i in range(len(temp_grads)):
+						temp_grads[i] += all_grads[i]
+
+				self.num_iter += 1
+				self.forward_passes += 1
+				if self.forward_passes == self.total_forward:
+					self.forward_passes = 0
+					self._write_grads(self.original_state_dict, temp_grads, (query_x, query_y))
+				else:
+					self.model.load_state_dict(self.original_state_dict)
+
 				# finished batch so can load data again from master
 				process_event.set()
 
@@ -222,7 +238,7 @@ class MetaTrainer:
 				# data_queue4.put(hey[3][0].numpy())
 			data_event.set()
 
-		new_model = self.meta_learners[0].model.state_dict()
+		new_model = self.meta_learners[0].model.original_state_dict
 
 		for p in processes:
 			p.terminate()
