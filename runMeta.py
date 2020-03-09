@@ -5,10 +5,11 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 # from old_dataset import MathDatasetManager, question_answer_to_batch_collate_fn
-from generator import Generator
+from dataset import MetaGeneratorDataset
 from datetime import date
 from parameters import VOCAB_SIZE, MAX_QUESTION_SIZE
 
+from torch.multiprocessing import set_start_method
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--filepath", default='./repo_files', type=str)
@@ -27,11 +28,12 @@ parser.add_argument("--num_updates", default=10, type=int)
 parser.add_argument("--k_shot", default=5, type=int)
 args = parser.parse_args()
 
-
-mdsmgr = MathDatasetManager("mathematics_dataset-v1.0")
+# mdsmgr = MathDatasetManager("mathematics_dataset-v1.0")
 # ds = MetaRepo('repo_files/beaker_line_pairs.csv', False)
 # d = DataLoader(ds, shuffle=True)
-
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(device, "redmond")
+device = 'cpu'
 def main(args):
 	random.seed(12324)
 	np.random.seed(12324)
@@ -39,10 +41,9 @@ def main(args):
 
 	num_validation_repos = 100
 	tb = Tensorboard(args.exp_name, unique_name=args.unique_id)
-	# repo_files = list(filter(lambda x: True if x.endswith('.csv') else False, next(os.walk(args.filepath))[2]))
 
-	data_loaders = [iter(DataLoader(Generator(args.filepath+'/'+dataset, False, k_shot=args.k_shot), shuffle=True, batch_size=1)) for dataset in repo_files[num_validation_repos:102]]
-	validation_data_loaders = [iter(DataLoader(Generator(args.filepath+'/'+dataset, False, k_shot=args.k_shot), shuffle=True, batch_size=1)) for dataset in repo_files[98:num_validation_repos]]
+	data_loaders = [iter(DataLoader(MetaGeneratorDataset(categories=["algebra", "probability", "geometry", "calculus"]), shuffle=True, batch_size=1))]
+	validation_data_loaders = [iter(DataLoader(MetaGeneratorDataset(categories=["comparison", "measurement", "arithmetic", "polynomials"]), shuffle=True, batch_size=1))]
 
 	# categories = mdsmgr.get_categories()
 	# types = mdsmgr.get_types()
@@ -69,14 +70,9 @@ def main(args):
 		torch.backends.cudnn.deterministic=True
 		torch.backends.cudnn.benchmark = False
 
-
-	model_params = (VOCAB_SIZE, VOCAB_SIZE, 0, 0, 
-					args.d_word_vec, args.d_word_vec, args.inner_dimension, args.num_layers,
-					args.num_heads, args.key_dimension, args.value_dimension, args.dropout,
-					MAX_QUESTION_SIZE, MAX_QUESTION_SIZE, True, True)
-	
-	trainer = MetaTrainer(args.meta_batch_size, device='cpu', model_params=model_params)
+	trainer = MetaTrainer(args.meta_batch_size, device=device)
 	trainer.train(data_loaders, tb, num_updates=args.num_updates)
 
 if __name__=='__main__':
+	set_start_method('spawn')
 	main(args)
