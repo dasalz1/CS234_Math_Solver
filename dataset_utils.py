@@ -16,7 +16,7 @@ def _filter_and_flatten(categories, modules_):
             for subc in subcategories[category]:
                 sample_categories.append(category + '__' + subc)
         else:
-            sample_categories.append(subc)
+            sample_categories.append(category)
 
     def add(submodules, prefix=None):
         for key, module_or_function in six.iteritems(submodules):

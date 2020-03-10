@@ -3,7 +3,7 @@ import torch, os, collections, six
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
 from dataset_utils import sample_from_module, _filter_and_flatten, _make_entropy_fn
-from transformer.Constants import PAD
+from transformer.Constants import PAD, EOS, BOS, UNK
 from mathematics_dataset.modules import modules
 from utils import np_encode_string
 from threading import Thread

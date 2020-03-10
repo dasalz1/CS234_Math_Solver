@@ -1,7 +1,8 @@
 import torch
 import torch.distributed as dist
 import torch.nn.functional as F
-from transformer.Models import Transformer
+from A3C import Policy_Network
+from transformer.bart import BartModel, BartConfig
 from torch import nn
 from torch import optim
 from torch import autograd
@@ -12,6 +13,8 @@ import pandas as pd
 from utils import save_checkpoint, from_checkpoint_if_exists, tb_mle_meta_batch
 import os
 from copy import deepcopy
+from parameters import VOCAB_SIZE, MAX_ANSWER_SIZE, MAX_QUESTION_SIZE
+from transformer.Constants import EOS
 
 PAD_IDX = 0
 
@@ -20,15 +23,33 @@ class Learner(nn.Module):
 	def __init__(self, process_id, gpu='cpu', world_size=4, total_forward=5, optimizer=optim.Adam, optimizer_sparse=optim.SparseAdam, optim_params=(1e-3, (0.9, 0.995), 1e-8), model_params=None):
 		super(Learner, self).__init__()
 
-		self.model = Transformer(*model_params)
-
+		self.device='cuda:'+str(process_id) if gpu is not 'cpu' else gpu
+		# if model_params is not None:
+			#self.model = Policy_Network(*model_params, data_parallel=False).to(self.device)
+		# else:
+			#self.model = Policy_Network(data_parallel=False).to(self.device)
+		bart_config = BartConfig(
+            vocab_size=VOCAB_SIZE+1,
+            pad_token_id=PAD_IDX,
+            eos_token_id=EOS,
+            d_model=512,
+            encoder_ffn_dim=2048,
+            encoder_layers=2,
+            encoder_attention_heads=4,
+            decoder_ffn_dim=2048,
+            decoder_layers=2,
+            decoder_attention_heads=4,
+            dropout=0.1,
+            max_encoder_position_embeddings=MAX_QUESTION_SIZE,
+            max_decoder_position_embeddings=MAX_ANSWER_SIZE
+        )
+		self.model = BartModel(bart_config).to(self.device)
 		if process_id == 0:
 			optim_params = (self.model.parameters(),) + optim_params
 			self.optimizer = optimizer(*optim_params)
 			self.forward_passes = 0
 
 		self.meta_optimizer = optim.SGD(self.model.parameters(), 0.1)
-		self.device='cuda:'+str(process_id) if gpu is not 'cpu' else gpu
 		self.process_id = process_id
 		self.num_iter = 0
 		self.world_size = world_size
@@ -40,6 +61,9 @@ class Learner(nn.Module):
 			# optim_params = optim_params.insert(0, self.model_parameters())
 			# self.optimizer = optimizer(*optim_params)
 
+	def compute_policy_loss(self, action_probs, curr_values):
+		pass
+
 	def compute_mle_loss(self, pred, target, smoothing, log=False):
 		def compute_loss(pred, target, smoothing):
 			target = target.contiguous().view(-1)
@@ -48,6 +72,7 @@ class Learner(nn.Module):
 			  n_class = pred.size(1)
 
 			  one_hot = torch.zeros_like(pred)
+			  print(one_hot.shape, target.shape)
 			  one_hot = one_hot.scatter(1, target.view(-1, 1), 1)
 			  one_hot = one_hot * (1 - eps) + (1 - one_hot) * eps / (n_class - 1)
 			  log_prb = F.log_softmax(pred, dim=1)
@@ -77,9 +102,9 @@ class Learner(nn.Module):
 			hooks.append(v.register_hook(closure()))
 		return hooks
 
-	def _write_grads(self, original_state_dict, all_grads, temp_data):
+	def _write_grads(self, all_grads, temp_data):
 		# reload original model before taking meta-gradients
-		self.model.load_state_dict(original_state_dict)
+		self.model.load_state_dict(self.original_state_dict)
 		self.model.to(self.device)
 		self.model.train()
 
@@ -87,7 +112,7 @@ class Learner(nn.Module):
 		self.optimizer.zero_grad()
 
 		dummy_query_x, dummy_query_y = temp_data
-		pred_logits = self.model(dummy_query_x, dummy_query_y[:, :-1])
+		pred_logits = self.model(input_ids=dummy_query_x, decoder_input_ids=dummy_query_y[:, :-1])
 		pred_logits = pred_logits.contiguous().view(-1, pred_logits.size(2))
 		dummy_loss, _ = self.compute_mle_loss(pred_logits, dummy_query_y[:, 1:], smoothing=True)
 
@@ -119,7 +144,7 @@ class Learner(nn.Module):
 			# broadcast weights from master process to all others and save them to a detached dictionary for loadinglater
 			for k, v in self.model.state_dict().items():
 				if self.process_id == 0:
-					original_state_dict[k] = v.clone().detach()
+					self.original_state_dict[k] = v.clone().detach()
 				dist.broadcast(v, src=0, async_op=True)
 
 			self.model.to(self.device)
@@ -129,7 +154,7 @@ class Learner(nn.Module):
 			support_x, support_y, query_x, query_y = map(lambda x: torch.LongTensor(x).to(self.device), data)
 			for i in range(num_updates):
 				self.meta_optimizer.zero_grad()
-				pred_logits = self.model(support_x, support_y[:, :-1])
+				pred_logits = self.model(input_ids=support_x, decoder_input_ids=support_y[:, :-1])
 				pred_logits = pred_logits.contiguous().view(-1, pred_logits.size(2))
 				loss, n_correct = self.compute_mle_loss(pred_logits, support_y[:, 1:], smoothing=True)
 				loss.backward()
@@ -137,7 +162,7 @@ class Learner(nn.Module):
 				self.meta_optimizer.step()
 
 
-			pred_logits = self.model(query_x, query_y[:, :-1])
+			pred_logits = self.model(input_ids=query_x, decoder_input_ids=query_y[:, :-1])
 			pred_logits = pred_logits.contiguous().view(-1, pred_logits.size(2))
 			loss, n_correct = self.compute_mle_loss(pred_logits, query_y[:, 1:], smoothing=True)
 
@@ -156,6 +181,7 @@ class Learner(nn.Module):
 
 			for idx in range(len(all_grads)):
 				dist.reduce(all_grads[idx].data, 0, op=dist.ReduceOp.SUM, async_op=True)
+				all_grads[idx] = (all_grads[idx] / self.world_size)
 
 			if self.process_id == 0 and tb is not None and self.num_iter % log_interval == 0:
 				tb_mle_meta_batch(tb, loss.item()/self.world_size, acc/self.world_size, self.num_iter)
@@ -168,12 +194,15 @@ class Learner(nn.Module):
 				else:
 					for i in range(len(temp_grads)):
 						temp_grads[i] += all_grads[i]
+						if self.forward_passes == self.total_forward:
+							self.forward_passes = 0
+							temp_grads[idx] = (temp_grads[idx] / self.total_forward)
 
 				self.num_iter += 1
 				self.forward_passes += 1
 				if self.forward_passes == self.total_forward:
 					self.forward_passes = 0
-					self._write_grads(self.original_state_dict, temp_grads, (query_x, query_y))
+					self._write_grads(temp_grads, (query_x, query_y))
 				else:
 					self.model.load_state_dict(self.original_state_dict)
 
@@ -188,7 +217,7 @@ class MetaTrainer:
 
 		self.meta_learners = [Learner(process_id=process_id, gpu=process_id if device is not 'cpu' else 'cpu', world_size=world_size, model_params=model_params) for process_id in range(world_size)]
 		# gpu backend instead of gloo
-		self.backend = "gloo"#"nccl"
+		self.backend = "gloo"
 		
 	def init_process(self, process_id, data_queue, data_event, process_event, num_updates, tb, address='localhost', port='29500'):
 		os.environ['MASTER_ADDR'] = address
@@ -217,19 +246,19 @@ class MetaTrainer:
 			processes[-1].start()
 
 		for num_iter in range(num_iters):
+			print("num iter:",num_iter)
 			process_event.wait()
-
 			process_event.clear()
 			tasks = np.random.randint(0, num_tasks, (self.world_size))
 			for task in tasks:
 				# place holder for sampling data from dataset
 				hey = next(data_loaders[task])
 				# print(hey[0].shape)
-				print(len(hey))
-				print(hey[0].shape)
-				print(hey[1].shape)
-				print(hey[2].shape)
-				print(hey[3].shape)
+				# print(len(hey))
+				# print(hey[0].shape)
+				# print(hey[1].shape)
+				# print(hey[2].shape)
+				# print(hey[3].shape)
 				data_queue.put((hey[0].numpy()[0], hey[1].numpy()[0], 
 								hey[2].numpy()[0], hey[3].numpy()[0]))
 				# data_queue.put(hey[0][0].numpy())
