@@ -5,7 +5,7 @@ import torch
 import torch.optim as optim
 from MetaLearning import MetaTrainer
 from datetime import date
-from dataset import NaïveCurriculumDataset
+from dataset import MetaGeneratorDataset
 from dataset import batch_collate_fn
 from parameters import VOCAB_SIZE, MAX_QUESTION_SIZE
 from generator import Generator
@@ -17,6 +17,8 @@ parser.add_argument("--unique_id", default=str(date.today()), type=str)
 parser.add_argument("--use_mle_only", default=False, action='store_true')
 parser.add_argument("--use_rl_only", default=False, action='store_true')
 args = parser.parse_args()
+
+mast_batches = 128
 
 def init_seed_and_devices():
     seed = 12324
@@ -40,20 +42,16 @@ def main(args):
     args = parser.parse_args()
     tb = Tensorboard(args.exp_name, unique_name=args.unique_id)
 
-    curriculum_dataset = NaïveCurriculumDataset()
-    curriculum_data_loader = torch.utils.data.DataLoader(curriculum_dataset, batch_size=4, collate_fn=batch_collate_fn)
-    num_iterations = len(curriculum_data_loader)
-    data_loaders = [iter(
-        DataLoader(Generator(args.filepath + '/' + dataset, False, k_shot=args.k_shot), shuffle=True, batch_size=1)) for
-                    dataset in repo_files[num_validation_repos:102]]
 
-    model_params = (VOCAB_SIZE, VOCAB_SIZE, 0, 0,
-                    args.d_word_vec, args.d_word_vec, args.inner_dimension, args.num_layers,
-                    args.num_heads, args.key_dimension, args.value_dimension, args.dropout,
-                    MAX_QUESTION_SIZE, MAX_QUESTION_SIZE, True, True)
-    print(f"1: {args.use_mle_only}, 2: {args.use_rl_only}")
-    trainer = MetaTrainer(args.meta_batch_size, device='cpu', model_params=model_params)
-    trainer.train(data_loaders, tb, num_updates=args.num_updates)
+    for meta_batch_num in range(mast_batches):
+        teacher = [iter(DataLoader(MetaGeneratorDataset(categories=["algebra", "probability", "geometry", "calculus"]),
+                                   shuffle=True, batch_size=1))]
+        # Train student
+        student = MetaTrainer(args.meta_batch_size / mast_batches, device=device)
+        student.train(teacher, tb, num_updates=args.num_updates)
+        # Train teacher
+        teacher = [iter(DataLoader(MetaGeneratorDataset(categories=["algebra", "probability", "geometry", "calculus"]),
+                                   shuffle=True, batch_size=1))]
 
 if __name__ == '__main__':
     main(args)
