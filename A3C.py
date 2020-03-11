@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-# from transformer.Models import Transformer, PositionalEncoding
+from transformer.Models import Transformer, PositionalEncoding
 from transformer.bart import BartModel
 from transformer.configuration_bart import BartConfig
 from transformer.Constants import PAD, EOS
@@ -19,11 +19,11 @@ class Policy_Network(nn.Module):
         
         super(Policy_Network, self).__init__()
         
-        # self.action_transformer = Transformer(n_src_vocab=VOCAB_SIZE + 1, n_trg_vocab=VOCAB_SIZE+1, src_pad_idx=0, trg_pad_idx=0,
+        # self.action_transformer = nn.DataParallel(Transformer(n_src_vocab=VOCAB_SIZE + 1, n_trg_vocab=VOCAB_SIZE+1, src_pad_idx=0, trg_pad_idx=0,
         #                        d_char_vec=d_char_vec, d_model=d_char_vec, d_inner=inner_dimension, n_layers=num_layers,
         #                        n_head=num_heads, d_k=key_dimension, d_v=value_dimension, dropout=dropout,
         #                        n_trg_position=n_trg_position, n_src_position=n_src_position,
-        #                        trg_emb_prj_weight_sharing=True, emb_src_trg_weight_sharing=True) if model == None else model
+        #                        trg_emb_prj_weight_sharing=True, emb_src_trg_weight_sharing=True) if model == None else model).cuda()
         
         bart_config = BartConfig(
             vocab_size=VOCAB_SIZE+1,
@@ -45,31 +45,31 @@ class Policy_Network(nn.Module):
         else:
             self.action_transformer = BartModel(bart_config).cuda()
 
-        # if data_parallel:
-        #     critic_src_embedding = self.action_transformer.module.shared
-        #     critic_trg_embedding = self.action_transformer.module.shared
-        #     critic_src_position = self.action_transformer.module.encoder.embed_positions
-        #     critic_trg_position = self.action_transformer.module.decoder.embed_positions
-        # else:
-        #     critic_src_embedding = self.action_transformer.shared
-        #     critic_trg_embedding = self.action_transformer.shared
-        #     critic_src_position = self.action_transformer.encoder.embed_positions
-        #     critic_trg_position = self.action_transformer.decoder.embed_positions
+        if data_parallel:
+            critic_src_embedding = self.action_transformer.module.shared
+            critic_trg_embedding = self.action_transformer.module.shared
+            critic_src_position = self.action_transformer.module.encoder.embed_positions
+            critic_trg_position = self.action_transformer.module.decoder.embed_positions
+        else:
+            critic_src_embedding = self.action_transformer.shared
+            critic_trg_embedding = self.action_transformer.shared
+            critic_src_position = self.action_transformer.encoder.embed_positions
+            critic_trg_position = self.action_transformer.decoder.embed_positions
 
-        # if data_parallel:
-        #     self.value_head = nn.DataParallel(Critic(conv_layers=critic_num_layers, d_char_vec=d_char_vec, kernel_size=critic_kernel_size,
-        #                             n_vocab=VOCAB_SIZE+1, dropout=dropout, padding=critic_padding, 
-        #                             src_embedding=critic_src_embedding, 
-        #                             trg_embedding=critic_trg_embedding, 
-        #                             src_position_enc=critic_src_position, 
-        #                             trg_position_enc=critic_trg_position).cuda())
-        # else:
-        #     self.value_head = Critic(conv_layers=critic_num_layers, d_char_vec=d_char_vec, kernel_size=critic_kernel_size,
-        #                             n_vocab=VOCAB_SIZE+1, dropout=dropout, padding=critic_padding, 
-        #                             src_embedding=critic_src_embedding, 
-        #                             trg_embedding=critic_trg_embedding, 
-        #                             src_position_enc=critic_src_position, 
-        #                             trg_position_enc=critic_trg_position).cuda()
+        if data_parallel:
+            self.value_head = nn.DataParallel(Critic(conv_layers=critic_num_layers, d_char_vec=d_char_vec, kernel_size=critic_kernel_size,
+                                    n_vocab=VOCAB_SIZE+1, dropout=dropout, padding=critic_padding, 
+                                    src_embedding=critic_src_embedding, 
+                                    trg_embedding=critic_trg_embedding, 
+                                    src_position_enc=critic_src_position, 
+                                    trg_position_enc=critic_trg_position).cuda())
+        else:
+            self.value_head = Critic(conv_layers=critic_num_layers, d_char_vec=d_char_vec, kernel_size=critic_kernel_size,
+                                    n_vocab=VOCAB_SIZE+1, dropout=dropout, padding=critic_padding, 
+                                    src_embedding=critic_src_embedding, 
+                                    trg_embedding=critic_trg_embedding, 
+                                    src_position_enc=critic_src_position, 
+                                    trg_position_enc=critic_trg_position).cuda()
     def forward(self, src_seq, trg_seq):
         action_prob = self.action_transformer(input_ids=src_seq, decoder_input_ids=trg_seq)
         action_prob = action_prob[:, -1, :]
@@ -89,11 +89,11 @@ class Critic(nn.Module):
         self.src_word_emb = src_embedding if src_embedding != None else nn.Embedding(n_vocab, d_char_vec, padding_idx=pad_idx)
         self.trg_word_emb = trg_embedding if trg_embedding != None else nn.Embedding(n_vocab, d_char_vec, padding_idx=pad_idx)
         
-        # self.src_position_enc = src_position_enc if src_position_enc != None else PositionalEncoding(d_char_vec, n_position=MAX_QUESTION_SIZE)
-        # self.trg_position_enc = trg_position_enc if trg_position_enc != None else PositionalEncoding(d_char_vec, n_position=MAX_ANSWER_SIZE)
+        self.src_position_enc = src_position_enc if src_position_enc != None else PositionalEncoding(d_char_vec, n_position=MAX_QUESTION_SIZE)
+        self.trg_position_enc = trg_position_enc if trg_position_enc != None else PositionalEncoding(d_char_vec, n_position=MAX_ANSWER_SIZE)
         self.dropout = nn.Dropout(p=dropout)
         
-        self.conv_layers = nn.ModuleList([nn.Conv1d(in_channels=d_char_vec, out_channels=d_char_vec, kernel_size=kernel_size, padding=padding) for _ in range(conv_layers)])
+        #self.conv_layers = nn.ModuleList([nn.Conv1d(in_channels=d_char_vec, out_channels=d_char_vec, kernel_size=kernel_size, padding=padding) for _ in range(conv_layers)])
         self.value_layer = nn.Linear(d_char_vec, 1)
         
     def forward(self, src_seq, trg_seq):

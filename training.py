@@ -59,6 +59,7 @@ class Trainer:
     else:
       # 1 if character is correct
       return (actions_pred==actions).float()
+
   def get_returns(self, rewards, batch_size, gamma):
     T = rewards.shape[1]
     discounts = torch.tensor(np.logspace(0, T, T, base=gamma, endpoint=False)).view(1, -1).to(self.device)
@@ -231,14 +232,15 @@ class Trainer:
           else:
             # self.tb_mle_policy_batch(tb, total_mle_loss, n_char_total, n_char_correct, batch_rewards, value_losses, epoch, batch_idx, len(training_data))
             self.tb_mle_policy_batch(tb, total_mle_loss, n_char_total, n_char_correct, batch_rewards, epoch, batch_idx, len(training_data))
-      if batch_idx != 0 and epoch % checkpoint_interval == 0:
+       
+      if epoch != 0 and epoch % checkpoint_interval == 0:
         self.save_checkpoint(epoch, model, optimizer, scheduler, suffix=str(epoch) + "-ml_rle")
       
       print("average rewards " + str(all_rewards))  
       loss_per_char = total_mle_loss / n_char_total
       accuracy = n_char_correct / n_char_total
 
-      if self.use_rl:
+      if not self.use_mle:
         average_rewards = np.mean(all_rewards)
         # average_value_loss = np.mean(all_value_losses)
       
