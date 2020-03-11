@@ -80,6 +80,16 @@ class Learner(nn.Module):
 
 		print("finished meta")
 
+	def calc_reward(self, actions_pred, actions, ignore_index=0, sparse_rewards=False):
+	# sparse rewards or char rewards
+	if sparse_rewards:
+		if actions_pred == EOS and actions == EOS:
+			return torch.ones_like(actions).cuda().float()
+		return torch.zeros_like(actions).cuda().float()
+	else:
+		# 1 if character is correct
+		return (actions_pred==actions).float()
+
 	def policy_batch_loss(self, batch_qs, batch_as, gamma=0.9):
 		batch_size, max_len_sequence = batch_qs.shape[0], batch_as.shape[1]
 		current_as = batch_as[:, :1]
