@@ -146,6 +146,8 @@ class Learner(nn.Module):
     advantages *= advantages_mask
 
     policy_losses = (-log_probs * advantages).sum(dim=-1).mean()
+    if self.process_id == 0:
+        print(policy_losses.requires_grad)
     batch_rewards = rewards.sum(dim=-1).mean()
 
     return policy_losses, batch_rewards
@@ -182,13 +184,13 @@ class Learner(nn.Module):
         self.meta_optimizer.step()
 
       loss, rewards = self.policy_batch_loss(query_x, query_y)
-
+      # loss.requires_grad = True
       # loss, pred = self.model(query_x, query_y)
-      print(loss.requires_grad)
+      # print(loss.requires_grad)
 
-      print([param.requires_grad for param in self.model.parameters()])
+      # print([param.requires_grad for param in self.model.parameters()])
 
-      all_grads = autograd.grad(loss, self.model.parameters())
+      all_grads = autograd.grad(loss, self.model.parameters(), allow_unused=True)
 
 
       for idx in range(len(all_grads)):
