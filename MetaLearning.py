@@ -195,7 +195,7 @@ class Learner(nn.Module):
 
       for idx in range(len(all_grads)):
         dist.reduce(all_grads[idx].data, 0, op=dist.ReduceOp.SUM, async_op=True)
-        all_grads[idx] = (all_grads[idx] / self.world_size)
+        all_grads[idx].data = (all_grads[idx].data / self.world_size)
 
       if self.process_id == 0:
         self.num_iter += 1
@@ -245,6 +245,10 @@ class MetaTrainer:
       process_event.clear()
       tasks = np.random.randint(0, num_tasks, (self.world_size))
       for task in tasks:
+        print(task_data[0].numpy()[0].shape)
+        print(task_data[0].numpy()[1].shape)
+        print(task_data[0].numpy()[2].shape)
+        print(task_data[0].numpy()[3].shape)
         # place holder for sampling data from dataset
         task_data = next(data_loaders[task])
         data_queue.put((task_data[0].numpy()[0], task_data[1].numpy()[0], 
