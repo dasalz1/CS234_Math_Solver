@@ -63,8 +63,7 @@ if __name__ == '__main__':
     checkpoint_interval = 100
     epochs = 1000000
     collate_fn = batch_collate_fn
-    ds = NaïveCurriculumDataset()
-    #GeneratorDataset(categories=["algebra", "probability"], num_iterations=num_iterations, batch_size=batch_size)
+    ds = GeneratorDataset(categories=["algebra", "probability"], num_iterations=num_iterations, batch_size=batch_size)
 
   train_loader = data.DataLoader(
       ds, batch_size=batch_size, shuffle=True,#num_workers=4,
