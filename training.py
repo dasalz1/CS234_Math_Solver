@@ -238,7 +238,7 @@ class Trainer:
       loss_per_char = total_mle_loss / n_char_total
       accuracy = n_char_correct / n_char_total
 
-      if not self.use_mle:
+      if self.use_rl:
         average_rewards = np.mean(all_rewards)
         # average_value_loss = np.mean(all_value_losses)
       
