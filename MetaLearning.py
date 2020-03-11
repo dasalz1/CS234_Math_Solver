@@ -64,10 +64,10 @@ class Learner(nn.Module):
     self.optimizer.zero_grad()
     dummy_query_x, dummy_query_y = temp_data
     print(" ")
-    action_probs = self.model(src_seq=dummy_query_x[0, :], trg_seq=dummy_query_y[0, :1])
+    action_probs = self.model(src_seq=dummy_query_x, trg_seq=dummy_query_y)
     m = Categorical(F.softmax(action_probs, dim=-1))
     actions = m.sample().reshape(-1, 1)
-    trg_t = batch_as[0, 1].reshape(-1, 1)
+    trg_t = batch_as[:, :1].reshape(-1, 1)
     dummy_loss = -F.cross_entropy(action_probs, trg_t.reshape(-1), ignore_index=0, reduction='none').reshape(-1, 1).sum()
     print(" ")
     hooks = self._hook_grads(all_grads)
