@@ -15,7 +15,7 @@ class Policy_Network(nn.Module):
                  value_dimension = 64, dropout = 0.1, n_position = 160, 
                  d_char_vec = 512, inner_dimension = 2048, 
                  n_trg_position = MAX_ANSWER_SIZE, n_src_position = MAX_QUESTION_SIZE, padding = 1,
-                critic_num_layers=2, critic_kernel_size=4, critic_padding=1, model=None, share_embedding_layers=False, data_parallel=True):
+                critic_num_layers=4, critic_kernel_size=4, critic_padding=1, model=None, share_embedding_layers=False, data_parallel=True):
         
         super(Policy_Network, self).__init__()
         
@@ -45,37 +45,38 @@ class Policy_Network(nn.Module):
         else:
             self.action_transformer = BartModel(bart_config).cuda()
 
-        if data_parallel:
-            critic_src_embedding = self.action_transformer.module.shared
-            critic_trg_embedding = self.action_transformer.module.shared
-            critic_src_position = self.action_transformer.module.encoder.embed_positions
-            critic_trg_position = self.action_transformer.module.decoder.embed_positions
-        else:
-            critic_src_embedding = self.action_transformer.shared
-            critic_trg_embedding = self.action_transformer.shared
-            critic_src_position = self.action_transformer.encoder.embed_positions
-            critic_trg_position = self.action_transformer.decoder.embed_positions
+        # if data_parallel:
+        #     critic_src_embedding = self.action_transformer.module.shared
+        #     critic_trg_embedding = self.action_transformer.module.shared
+        #     critic_src_position = self.action_transformer.module.encoder.embed_positions
+        #     critic_trg_position = self.action_transformer.module.decoder.embed_positions
+        # else:
+        #     critic_src_embedding = self.action_transformer.shared
+        #     critic_trg_embedding = self.action_transformer.shared
+        #     critic_src_position = self.action_transformer.encoder.embed_positions
+        #     critic_trg_position = self.action_transformer.decoder.embed_positions
 
-        if data_parallel:
-            self.value_head = nn.DataParallel(Critic(conv_layers=critic_num_layers, d_char_vec=d_char_vec, kernel_size=critic_kernel_size,
-                                    n_vocab=VOCAB_SIZE+1, dropout=dropout, padding=critic_padding, 
-                                    src_embedding=critic_src_embedding, 
-                                    trg_embedding=critic_trg_embedding, 
-                                    src_position_enc=critic_src_position, 
-                                    trg_position_enc=critic_trg_position).cuda())
-        else:
-            self.value_head = Critic(conv_layers=critic_num_layers, d_char_vec=d_char_vec, kernel_size=critic_kernel_size,
-                                    n_vocab=VOCAB_SIZE+1, dropout=dropout, padding=critic_padding, 
-                                    src_embedding=critic_src_embedding, 
-                                    trg_embedding=critic_trg_embedding, 
-                                    src_position_enc=critic_src_position, 
-                                    trg_position_enc=critic_trg_position).cuda()
+        # if data_parallel:
+        #     self.value_head = nn.DataParallel(Critic(conv_layers=critic_num_layers, d_char_vec=d_char_vec, kernel_size=critic_kernel_size,
+        #                             n_vocab=VOCAB_SIZE+1, dropout=dropout, padding=critic_padding, 
+        #                             src_embedding=critic_src_embedding, 
+        #                             trg_embedding=critic_trg_embedding, 
+        #                             src_position_enc=critic_src_position, 
+        #                             trg_position_enc=critic_trg_position).cuda())
+        # else:
+        #     self.value_head = Critic(conv_layers=critic_num_layers, d_char_vec=d_char_vec, kernel_size=critic_kernel_size,
+        #                             n_vocab=VOCAB_SIZE+1, dropout=dropout, padding=critic_padding, 
+        #                             src_embedding=critic_src_embedding, 
+        #                             trg_embedding=critic_trg_embedding, 
+        #                             src_position_enc=critic_src_position, 
+        #                             trg_position_enc=critic_trg_position).cuda()
     def forward(self, src_seq, trg_seq):
         action_prob = self.action_transformer(input_ids=src_seq, decoder_input_ids=trg_seq)
         action_prob = action_prob[:, -1, :]
-        state_values = self.value_head(src_seq, trg_seq)
+        # state_values = self.value_head(src_seq, trg_seq)
         
-        return action_prob, state_values
+        # return action_prob, state_values
+        return action_prob
 
 
 class Critic(nn.Module):

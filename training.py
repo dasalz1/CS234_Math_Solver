@@ -50,10 +50,15 @@ class Trainer:
         scheduler.load_state_dict(checkpoint['scheduler'])
     return epoch, model, optimizer, scheduler
   
-  def calc_reward(self, actions_pred, actions, ignore_index=0):
-    # 1 if character is correct
-    return (actions_pred==actions).float()
-
+  def calc_reward(self, actions_pred, actions, ignore_index=0, sparse_rewards=False):
+    # sparse rewards or char rewards
+    if sparse_rewards:
+      if actions_pred == EOS and actions == EOS:
+        return torch.ones_like(actions).cuda().float()
+      return torch.zeros_like(actions).cuda().float()
+    else:
+      # 1 if character is correct
+      return (actions_pred==actions).float()
   def get_returns(self, rewards, batch_size, gamma):
     T = rewards.shape[1]
     discounts = torch.tensor(np.logspace(0, T, T, base=gamma, endpoint=False)).view(1, -1).to(self.device)
@@ -137,25 +142,23 @@ class Trainer:
       global_step=epoch
     )
   
-  def tb_mle_policy_batch(self, tb, total_loss, n_char_total, n_char_correct, batch_rewards, average_value_loss, epoch, batch_idx, data_len):
+  def tb_mle_policy_batch(self, tb, total_loss, n_char_total, n_char_correct, batch_rewards, epoch, batch_idx, data_len):
     tb.add_scalars(
       {
         "loss_per_char" : total_loss / n_char_total,
         "accuracy": n_char_correct / n_char_total,
         "batch_average_rewards" : batch_rewards,
-        "epoch_value_loss": average_value_loss, 
       },
     group="mle_policy_train",
     sub_group="batch",
     global_step = epoch*data_len+batch_idx)
 
-  def tb_mle_policy_epoch(self, tb, loss_per_char, accuracy, average_rewards, average_value_loss, epoch):
+  def tb_mle_policy_epoch(self, tb, loss_per_char, accuracy, average_rewards, epoch):
     tb.add_scalars(
       {
         "loss_per_char" : loss_per_char,
         "accuracy" : accuracy,
         "epoch_average_reward" : average_rewards,
-        "epoch_value_loss": average_value_loss, 
       },
       group="train",
       sub_group="epoch",
@@ -187,7 +190,8 @@ class Trainer:
         optimizer.zero_grad()
 
         if not self.use_mle:
-          policy_losses, value_losses, batch_rewards = self.policy_batch_loss(batch_qs, batch_as, model, gamma=0.9)
+          # policy_losses, value_losses, batch_rewards = self.policy_batch_loss(batch_qs, batch_as, model, gamma=0.9)
+          policy_losses, batch_rewards = self.policy_batch_loss(batch_qs, batch_as, model, gamma=0.9)
 
         if not self.use_rl:
           mle_loss, n_correct, n_char = self.mle_batch_loss(batch_qs, batch_as, model.action_transformer)
@@ -195,11 +199,13 @@ class Trainer:
         if self.use_mle:
           loss = mle_loss
         elif self.use_rl:
-          loss = policy_losses + value_losses
+          # loss = policy_losses + value_losses
+          loss = policy_losses
         else:
           # eta linear decay
-          eta_ld = eta - eta * (iterations / len(training_data))
-          loss = (1-eta_ld)*policy_losses + value_losses + eta_ld*mle_loss
+          eta_ld = eta - eta * (iterations / (float(len(training_data) * epochs) / 2))
+          # loss = (1-eta_ld)* (policy_losses + value_losses) + eta_ld*mle_loss
+          loss = (1 - eta_ld) * policy_losses + eta_ld * mle_loss
           iterations += batch_qs.shape[0]
 
         loss.backward()
@@ -213,9 +219,9 @@ class Trainer:
           n_char_total += n_char
           n_char_correct += n_correct
           total_mle_loss += mle_loss
-        if self.use_rl:
-          all_rewards.append(batch_rewards)
-          all_value_losses.append(value_losses)
+        if not self.use_mle:
+          all_rewards.append(batch_rewards.cpu().numpy())
+          # all_value_losses.append(value_losses)
 
         if tb is not None and batch_idx % log_interval == 0:
           if self.use_mle:
@@ -223,9 +229,10 @@ class Trainer:
           elif self.use_rl:
             self.tb_policy_batch(tb, batch_rewards, value_losses, epoch, batch_idx, len(training_data))
           else:
-            self.tb_mle_policy_batch(tb, total_mle_loss, n_char_total, n_char_correct, batch_rewards, value_losses, epoch, batch_idx, len(training_data))
-        if batch_idx != 0 and batch_idx % checkpoint_interval == 0:
-          self.save_checkpoint(epoch, model, optimizer, scheduler, suffix=str(batch_idx))
+            # self.tb_mle_policy_batch(tb, total_mle_loss, n_char_total, n_char_correct, batch_rewards, value_losses, epoch, batch_idx, len(training_data))
+            self.tb_mle_policy_batch(tb, total_mle_loss, n_char_total, n_char_correct, batch_rewards, epoch, batch_idx, len(training_data))
+      if batch_idx != 0 and epoch % checkpoint_interval == 0:
+        self.save_checkpoint(epoch, model, optimizer, scheduler, suffix=str(epoch) + "-ml_rle")
       
       print("average rewards " + str(all_rewards))  
       loss_per_char = total_mle_loss / n_char_total
@@ -233,7 +240,7 @@ class Trainer:
 
       if not self.use_mle:
         average_rewards = np.mean(all_rewards)
-        average_value_loss = np.mean(all_value_losses)
+        # average_value_loss = np.mean(all_value_losses)
       
       if tb is not None:
         if self.use_mle:
@@ -241,7 +248,8 @@ class Trainer:
         elif self.use_rl:
           self.tb_policy_epoch(tb, average_rewards, average_value_loss, epoch)
         else:
-          self.tb_mle_policy_epoch(tb, loss_per_char, accuracy, average_rewards, average_value_loss, epoch)
+          # self.tb_mle_policy_epoch(tb, loss_per_char, accuracy, average_rewards, average_value_loss, epoch)
+          self.tb_mle_policy_epoch(tb, loss_per_char, accuracy, average_rewards, epoch)
 
   def mle_batch_loss(self, batch_qs, batch_as, model):
     trg_as = batch_as[:, 1:]
@@ -264,7 +272,8 @@ class Trainer:
     advantages_mask = torch.ones((batch_size, 0)).to(self.device)
     for t in range(1, max_len_sequence):
       advantages_mask = torch.cat((advantages_mask, complete), dim=1)
-      action_probs, curr_values = model(src_seq=batch_qs, trg_seq=current_as)
+      # action_probs, curr_values = model(src_seq=batch_qs, trg_seq=current_as)
+      action_probs = model(src_seq=batch_qs, trg_seq=current_as)
       m = Categorical(F.softmax(action_probs, dim=-1))
       actions = m.sample().reshape(-1, 1)
       
@@ -280,24 +289,25 @@ class Trainer:
       
       # update terms
       rewards = torch.cat((rewards, curr_rewards), dim=1).to(self.device)
-      values = torch.cat((values, curr_values), dim=1).to(self.device)
+      # values = torch.cat((values, curr_values), dim=1).to(self.device)
       log_probs = torch.cat((log_probs, curr_log_probs), dim=1)
       
       # if the action taken is EOS or if end of sequence trajectory ends
       complete *= (1 - ((actions==EOS) | (trg_t==EOS)).float())
     
-
     returns = self.get_returns(rewards, batch_size, gamma)
     
-    advantages = returns - values
+    # advantages = returns - values
+    advantages = returns
     advantages *= advantages_mask
 
     policy_losses = (-log_probs * advantages).sum(dim=-1).mean()
 
-    value_losses = F.mse_loss(values, rewards, reduction='mean')
+    # value_losses = F.mse_loss(values, rewards, reduction='mean')
 
     batch_rewards = rewards.sum(dim=-1).mean()
-    return policy_losses, value_losses, batch_rewards
+    # return policy_losses, value_losses, batch_rewards
+    return policy_losses, batch_rewards
   
    
   def train_mle_epoch(self, training_data, model, optimizer, epoch, tb=None, log_interval=100):
