@@ -93,7 +93,9 @@ class NaïveCurriculumDataset(Dataset):
         self.current_iteration += 1
         return ques, anws
         
-
+class DeepCurriculumDataset():
+    def __init__(self):
+        pass
 
 
 def batch_collate_fn(values):
