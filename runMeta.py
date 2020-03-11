@@ -32,7 +32,7 @@ args = parser.parse_args()
 # d = DataLoader(ds, shuffle=True)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device, "redmond")
-device = 'cpu'
+# device = 'cpu'
 def main(args):
 	random.seed(12324)
 	np.random.seed(12324)
