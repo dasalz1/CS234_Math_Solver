@@ -67,8 +67,8 @@ class Learner(nn.Module):
     action_probs = self.model(src_seq=dummy_query_x, trg_seq=dummy_query_y)
     m = Categorical(F.softmax(action_probs, dim=-1))
     actions = m.sample().reshape(-1, 1)
-    trg_t = batch_as[:, :1].reshape(-1, 1)
-    dummy_loss = -F.cross_entropy(action_probs, trg_t.reshape(-1), ignore_index=0, reduction='none').reshape(-1, 1).sum()
+    trg_t = batch_as[:, :1]
+    dummy_loss = -F.cross_entropy(action_probs, trg_t.reshape(-1), ignore_index=0, reduction='none').sum()
     print(" ")
     hooks = self._hook_grads(all_grads)
 
