@@ -12,8 +12,7 @@ from parameters import VOCAB_SIZE, MAX_QUESTION_SIZE
 from torch.multiprocessing import set_start_method
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--filepath", default='./repo_files', type=str)
-parser.add_argument("--exp_name", default='EditorPairTrain', type=str)
+parser.add_argument("--exp_name", default='MathSolver', type=str)
 parser.add_argument("--unique_id", default=str(date.today()), type=str)
 parser.add_argument("--num_layers", default=6, type=int)
 parser.add_argument("--num_heads", default=8, type=int)

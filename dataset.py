@@ -81,8 +81,6 @@ class NaïveCurriculumDataset(Dataset):
 
     def __getitem__(self, idx):
         states = self.categories
-        actions =
-
         difficulty = self.current_iteration / self.num_iterations
         initial_modules = modules.train(_make_entropy_fn(difficulty, 1))
         filtered_modules = _filter_and_flatten(self.categories, initial_modules)

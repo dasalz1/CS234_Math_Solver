@@ -21,8 +21,8 @@ class Learner(nn.Module):
 
 	def __init__(self, process_id, gpu='cpu', world_size=4, optimizer=optim.Adam, optimizer_sparse=optim.SparseAdam, optim_params=(1e-3, (0.9, 0.995), 1e-8), model_params=None):
 		super(Learner, self).__init__()
-
-		self.model = Policy_Network()
+		print(gpu)
+		self.model = Policy_Network(data_parallel=False, use_gpu=True if gpu!='cpu' else False)
 		if process_id == 0:
 			optim_params = (self.model.parameters(),) + optim_params
 			self.optimizer = optimizer(*optim_params)
@@ -35,12 +35,11 @@ class Learner(nn.Module):
 		self.world_size = world_size
 		self.original_state_dict = {}
 
-
 		# if process == 0:
 			# optim_params = optim_params.insert(0, self.model_parameters())
 			# self.optimizer = optimizer(*optim_params)
 
-	def save_checkpoint(model, optimizer, iteration):
+	def save_checkpoint(self, model, optimizer, iteration):
 		torch.save({'model': model.state_dict(), 'optimizer': optimizer.state_dict(),}, "checkpoint-{}.pth".format(iteration))
 
 	def _hook_grads(self, all_grads):
@@ -82,14 +81,14 @@ class Learner(nn.Module):
 		print("finished meta")
 
 	def policy_batch_loss(self, batch_qs, batch_as, gamma=0.9):
-	    batch_size, max_len_sequence = batch_qs.shape[0], batch_as.shape[1]
-	    current_as = batch_as[:, :1]
-	    complete = torch.ones((batch_size, 1)).to(self.device)
-	    rewards = torch.zeros((batch_size, 0)).to(self.device)
-	    values = torch.zeros((batch_size, 0)).to(self.device)
-	    log_probs = torch.zeros((batch_size, 0)).to(self.device)
-	    advantages_mask = torch.ones((batch_size, 0)).to(self.device)
-	    for t in range(1, max_len_sequence):
+		batch_size, max_len_sequence = batch_qs.shape[0], batch_as.shape[1]
+		current_as = batch_as[:, :1]
+		complete = torch.ones((batch_size, 1)).to(self.device)
+		rewards = torch.zeros((batch_size, 0)).to(self.device)
+		values = torch.zeros((batch_size, 0)).to(self.device)
+		log_probs = torch.zeros((batch_size, 0)).to(self.device)
+		advantages_mask = torch.ones((batch_size, 0)).to(self.device)
+		for t in range(1, max_len_sequence):
 			advantages_mask = torch.cat((advantages_mask, complete), dim=1)
 			# action_probs, curr_values = model(src_seq=batch_qs, trg_seq=current_as)
 			action_probs = self.model(src_seq=batch_qs, trg_seq=current_as)
@@ -124,11 +123,6 @@ class Learner(nn.Module):
 		batch_rewards = rewards.sum(dim=-1).mean()
 
 		return policy_losses, batch_rewards
-    
-
-    batch_rewards = rewards.sum(dim=-1).mean()
-    # return policy_losses, value_losses, batch_rewards
-    return policy_losses, batch_rewards
 
 	def forward(self, num_updates, data_queue, data_event, process_event, tb=None, log_interval=100, checkpoint_interval=10000):
 		while(True):
@@ -141,7 +135,7 @@ class Learner(nn.Module):
 				data_event.clear()
 
 			if self.process_id == 0 and self.num_iter != 0 and self.num_iter % checkpoint_interval == 0:
-				self.save_checkpoint(model, optimizer, self.num_iter):
+				self.save_checkpoint(model, optimizer, self.num_iter)
 
 			# broadcast weights from master process to all others and save them to a detached dictionary for loadinglater
 			for k, v in self.model.state_dict().items():

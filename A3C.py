@@ -15,7 +15,7 @@ class Policy_Network(nn.Module):
                  value_dimension = 64, dropout = 0.1, n_position = 160, 
                  d_char_vec = 512, inner_dimension = 2048, 
                  n_trg_position = MAX_ANSWER_SIZE, n_src_position = MAX_QUESTION_SIZE, padding = 1,
-                critic_num_layers=4, critic_kernel_size=4, critic_padding=1, model=None, share_embedding_layers=False, data_parallel=True):
+                critic_num_layers=4, critic_kernel_size=4, critic_padding=1, model=None, share_embedding_layers=False, data_parallel=True, use_gpu=True):
         
         super(Policy_Network, self).__init__()
         
@@ -42,8 +42,10 @@ class Policy_Network(nn.Module):
         )
         if data_parallel:
             self.action_transformer = nn.DataParallel(BartModel(bart_config).cuda())
-        else:
+        elif use_gpu:
             self.action_transformer = BartModel(bart_config).cuda()
+        else:
+            self.action_transformer = BartModel(bart_config)
 
         # if data_parallel:
         #     critic_src_embedding = self.action_transformer.module.shared
