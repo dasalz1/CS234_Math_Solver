@@ -146,8 +146,6 @@ class Learner(nn.Module):
     advantages *= advantages_mask
 
     policy_losses = (-log_probs * advantages).sum(dim=-1).mean()
-    if self.process_id == 0:
-        print(policy_losses.requires_grad)
     batch_rewards = rewards.sum(dim=-1).mean()
 
     return policy_losses, batch_rewards
@@ -246,10 +244,6 @@ class MetaTrainer:
       tasks = np.random.randint(0, num_tasks, (self.world_size))
       for task in tasks:
         task_data = next(data_loaders[task])
-        print(task_data[0].numpy()[0].shape)
-        print(task_data[0].numpy()[1].shape)
-        print(task_data[0].numpy()[2].shape)
-        print(task_data[0].numpy()[3].shape)
         # place holder for sampling data from dataset
         
         data_queue.put((task_data[0].numpy()[0], task_data[1].numpy()[0], 
