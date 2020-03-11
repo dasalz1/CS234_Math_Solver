@@ -28,7 +28,7 @@ class Learner(nn.Module):
       optim_params = (self.model.parameters(),) + optim_params
       self.optimizer = optimizer(*optim_params)
 
-    self.meta_optimizer = optim.SGD(self.model.parameters(), 0.03)
+    self.meta_optimizer = optim.SGD(self.model.parameters(), 0.04)
     self.process_id = process_id
     self.device='cuda:'+str(process_id) if gpu is not 'cpu' else gpu
     self.model.to(self.device)
@@ -64,11 +64,11 @@ class Learner(nn.Module):
     self.optimizer.zero_grad()
     dummy_query_x, dummy_query_y = temp_data
     print(" ")
-    action_probs = self.model(src_seq=dummy_query_x[0, :], trg_seq=dummy_query_y[0, :1])
+    action_probs = self.model(src_seq=dummy_query_x, trg_seq=dummy_query_y)
     m = Categorical(F.softmax(action_probs, dim=-1))
     actions = m.sample().reshape(-1, 1)
-    trg_t = batch_as[0, 1].reshape(-1, 1)
-    dummy_loss = -F.cross_entropy(action_probs, trg_t.reshape(-1), ignore_index=0, reduction='none').reshape(-1, 1).sum()
+    trg_t = dummy_query_y[:, :1]
+    dummy_loss = -F.cross_entropy(action_probs, trg_t.reshape(-1), ignore_index=0, reduction='none').sum()
     print(" ")
     hooks = self._hook_grads(all_grads)
 
@@ -182,17 +182,22 @@ class Learner(nn.Module):
         self.meta_optimizer.step()
 
       loss, rewards = self.policy_batch_loss(query_x, query_y)
-
+      # loss.requires_grad = True
       # loss, pred = self.model(query_x, query_y)
+      # print(loss.requires_grad)
+
+      # print([param.requires_grad for param in self.model.parameters()])
+
       all_grads = autograd.grad(loss, self.model.parameters())
+
 
       for idx in range(len(all_grads)):
         dist.reduce(all_grads[idx].data, 0, op=dist.ReduceOp.SUM, async_op=True)
-        all_grads[idx] = (all_grads[idx] / self.world_size)
+        all_grads[idx].data = (all_grads[idx].data / self.world_size)
 
       if self.process_id == 0:
         self.num_iter += 1
-        self._write_grads(original_state_dict, temp_grads, (query_x, query_y))
+        self._write_grads(original_state_dict, all_grads, (query_x, query_y))
         # finished batch so can load data again from master
         process_event.set()
 
@@ -238,8 +243,9 @@ class MetaTrainer:
       process_event.clear()
       tasks = np.random.randint(0, num_tasks, (self.world_size))
       for task in tasks:
-        # place holder for sampling data from dataset
         task_data = next(data_loaders[task])
+        # place holder for sampling data from dataset
+        
         data_queue.put((task_data[0].numpy()[0], task_data[1].numpy()[0], 
                 task_data[2].numpy()[0], task_data[3].numpy()[0]))
       data_event.set()
