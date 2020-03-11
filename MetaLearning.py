@@ -11,7 +11,6 @@ from torch.multiprocessing import Process, Queue
 from multiprocessing import Event
 import numpy as np
 import pandas as pd
-from utils import save_checkpoint, from_checkpoint_if_exists, tb_mle_meta_batch
 import os
 from copy import deepcopy
 from parameters import VOCAB_SIZE, MAX_ANSWER_SIZE, MAX_QUESTION_SIZE
@@ -41,8 +40,8 @@ class Learner(nn.Module):
 			# optim_params = optim_params.insert(0, self.model_parameters())
 			# self.optimizer = optimizer(*optim_params)
 
-	def compute_policy_loss(self, action_probs, curr_values):
-		pass
+	def save_checkpoint(model, optimizer, iteration):
+		torch.save({'model': model.state_dict(), 'optimizer': optimizer.state_dict(),}, "checkpoint-{}.pth".format(iteration))
 
 	def _hook_grads(self, all_grads):
 		hooks = []
@@ -142,7 +141,7 @@ class Learner(nn.Module):
 				data_event.clear()
 
 			if self.process_id == 0 and self.num_iter != 0 and self.num_iter % checkpoint_interval == 0:
-				save_checkpoint(0, self.model, self.optimizer, suffix=str(self.num_iter))
+				self.save_checkpoint(model, optimizer, self.num_iter):
 
 			# broadcast weights from master process to all others and save them to a detached dictionary for loadinglater
 			for k, v in self.model.state_dict().items():
@@ -161,7 +160,7 @@ class Learner(nn.Module):
 				loss.backward()
 				torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
 				self.meta_optimizer.step()
-				
+
 			loss, rewards = self.policy_batch_loss(query_x, query_y)
 
 			# loss, pred = self.model(query_x, query_y)
@@ -220,22 +219,10 @@ class MetaTrainer:
 			tasks = np.random.randint(0, num_tasks, (self.world_size))
 			for task in tasks:
 				# place holder for sampling data from dataset
-				hey = next(data_loaders[task])
-				# print(hey[0].shape)
-				# print(len(hey))
-				# print(hey[0].shape)
-				# print(hey[1].shape)
-				# print(hey[2].shape)
-				# print(hey[3].shape)
-				data_queue.put((hey[0].numpy()[0], hey[1].numpy()[0], 
-								hey[2].numpy()[0], hey[3].numpy()[0]))
-				# data_queue.put(hey[0][0].numpy())
-				# data_queue2.put(hey[1][0].numpy())
-				# data_queue3.put(hey[2][0].numpy())
-				# data_queue4.put(hey[3][0].numpy())
+				task_data = next(data_loaders[task])
+				data_queue.put((task_data[0].numpy()[0], task_data[1].numpy()[0], 
+								task_data[2].numpy()[0], task_data[3].numpy()[0]))
 			data_event.set()
-
-		new_model = self.meta_learners[0].model.original_state_dict
 
 		for p in processes:
 			p.terminate()
