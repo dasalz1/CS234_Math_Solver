@@ -28,7 +28,7 @@ class Learner(nn.Module):
       optim_params = (self.model.parameters(),) + optim_params
       self.optimizer = optimizer(*optim_params)
 
-    self.meta_optimizer = optim.SGD(self.model.parameters(), 0.03)
+    self.meta_optimizer = optim.SGD(self.model.parameters(), 0.04)
     self.process_id = process_id
     self.device='cuda:'+str(process_id) if gpu is not 'cpu' else gpu
     self.model.to(self.device)
@@ -184,7 +184,12 @@ class Learner(nn.Module):
       loss, rewards = self.policy_batch_loss(query_x, query_y)
 
       # loss, pred = self.model(query_x, query_y)
+      print(loss.requires_grad)
+
+      print([param.requires_grad for param in self.model.parameters()])
+
       all_grads = autograd.grad(loss, self.model.parameters())
+
 
       for idx in range(len(all_grads)):
         dist.reduce(all_grads[idx].data, 0, op=dist.ReduceOp.SUM, async_op=True)
