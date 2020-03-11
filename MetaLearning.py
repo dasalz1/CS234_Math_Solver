@@ -83,10 +83,10 @@ class Learner(nn.Module):
     def calc_reward(self, actions_pred, actions, ignore_index=0, sparse_rewards=False):
     # sparse rewards or char rewards
     if sparse_rewards:
-        if actions_pred == EOS and actions == EOS:
-            return torch.ones_like(actions).cuda().float()
-        return torch.zeros_like(actions).cuda().float()
-    else:
+		if actions_pred == EOS and actions == EOS:
+			return torch.ones_like(actions).cuda().float()
+		return torch.zeros_like(actions).cuda().float()
+	else:
         # 1 if character is correct
         return (actions_pred==actions).float()
   
