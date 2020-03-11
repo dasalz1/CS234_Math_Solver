@@ -188,7 +188,7 @@ class Learner(nn.Module):
 
       # print([param.requires_grad for param in self.model.parameters()])
 
-      all_grads = autograd.grad(loss, self.model.parameters(), allow_unused=True)
+      all_grads = autograd.grad(loss, self.model.parameters())
 
 
       for idx in range(len(all_grads)):
@@ -197,7 +197,7 @@ class Learner(nn.Module):
 
       if self.process_id == 0:
         self.num_iter += 1
-        self._write_grads(original_state_dict, temp_grads, (query_x, query_y))
+        self._write_grads(original_state_dict, all_grads, (query_x, query_y))
         # finished batch so can load data again from master
         process_event.set()
 
