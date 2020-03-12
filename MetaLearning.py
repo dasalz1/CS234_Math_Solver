@@ -16,15 +16,17 @@ import os
 from copy import deepcopy
 from parameters import VOCAB_SIZE, MAX_ANSWER_SIZE, MAX_QUESTION_SIZE
 from dataset import PAD, EOS
+from training import Trainer
 
 PAD_IDX = 0
 
 class Learner(nn.Module):
 
-  def __init__(self, process_id, gpu='cpu', world_size=4, optimizer=optim.Adam, optimizer_sparse=optim.SparseAdam, optim_params=(1e-3, (0.9, 0.995), 1e-8), model_params=None):
+  def __init__(self, process_id, gpu='cpu', world_size=4, optimizer=optim.Adam, optimizer_sparse=optim.SparseAdam, optim_params=(1e-3, (0.9, 0.995), 1e-8), model_params=None, tb=None):
     super(Learner, self).__init__()
     print(gpu)
     self.model = Policy_Network(data_parallel=False)
+    saved_checkpoint = torch.load("./checkpoint.pth")
     self.model.load_state_dict(saved_checkpoint['model'], strict=False)
     if process_id == 0:
       optim_params = (self.model.parameters(),) + optim_params
@@ -40,6 +42,8 @@ class Learner(nn.Module):
     self.eps = np.finfo(np.float32).eps.item()
     self.use_ml = False
     self.use_rl = False
+    self.trainer = Trainer(self.use_ml, self.use_rl, self.device)
+    self.tb = tb
 
     # if process == 0:
       # optim_params = optim_params.insert(0, self.model_parameters())
@@ -184,39 +188,41 @@ class Learner(nn.Module):
         self.meta_optimizer.step()
 
       loss, rewards = self.policy_batch_loss(query_x, query_y)
+      self.trainer.tb_policy_batch(self.tb, rewards, loss, self.num_iter, 0, 1)
 
       # loss, pred = self.model(query_x, query_y)
-      all_grads = autograd.grad(loss, self.model.parameters())
+      all_grads = list(autograd.grad(loss, self.model.parameters()))
 
       for idx in range(len(all_grads)):
         dist.reduce(all_grads[idx].data, 0, op=dist.ReduceOp.SUM, async_op=True)
-        all_grads[idx] = (all_grads[idx] / self.world_size)
+        all_grads[idx] = all_grads[idx] / self.world_size
 
       if self.process_id == 0:
         self.num_iter += 1
-        self._write_grads(original_state_dict, temp_grads, (query_x, query_y))
+        self._write_grads(original_state_dict, all_grads, (query_x, query_y))
         # finished batch so can load data again from master
         process_event.set()
 
 
 class MetaTrainer:
 
-  def __init__(self, world_size, device='cpu', model_params=None):
+  def __init__(self, world_size, device='cpu', model_params=None, tb=None):
     self.world_size = world_size
 
-    self.meta_learners = [Learner(process_id=process_id, gpu=process_id if device is not 'cpu' else 'cpu', world_size=world_size, model_params=model_params) for process_id in range(world_size)]
+    self.meta_learners = [Learner(process_id=process_id, gpu=process_id if device is not 'cpu' else 'cpu', world_size=world_size, model_params=model_params, tb=tb) for process_id in range(world_size)]
     # gpu backend instead of gloo
     self.backend = "nccl"#"gloo"
     
-  def init_process(self, process_id, data_queue, data_event, process_event, num_updates, tb, address='localhost', port='29500'):
+  def init_process(self, process_id, data_queue, data_event, process_event, num_updates, tb=None, address='localhost', port='29500'):
     os.environ['MASTER_ADDR'] = address
     os.environ['MASTER_PORT'] = port
     dist.init_process_group(self.backend, rank=process_id, world_size=self.world_size)
-    self.meta_learners[process_id](num_updates, data_queue, data_event, process_event, tb)
+    self.meta_learners[process_id](num_updates, data_queue, data_event, process_event)
+
 
 
   # dataloaders is list of the iterators of the dataloaders for each task
-  def train(self, data_loaders, tb=None, num_updates = 5, num_iters=250000):
+  def train(self, data_loaders, num_updates = 5, tb=None, num_iters=250000):
     data_queue = Queue()
     # for notifying when to recieve data
     data_event = Event()
@@ -230,7 +236,7 @@ class MetaTrainer:
     for process_id in range(self.world_size):
       processes.append(Process(target=self.init_process, 
                         args=(process_id, data_queue, data_event, 
-                          process_event, num_updates, 
+                          process_event, num_updates,
                           tb if process_id == 0 else None)))
       processes[-1].start()
 

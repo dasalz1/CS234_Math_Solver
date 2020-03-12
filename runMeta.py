@@ -40,7 +40,7 @@ def main(args):
   num_validation_repos = 100
   tb = Tensorboard(args.exp_name, unique_name=args.unique_id)
 
-  data_loaders = [iter(DataLoader(MetaGeneratorDataset(categories=['algebra', 'arithmetic', 'numbers', 'comparison'], num_iterations=1, batch_size=4, k_shot=5), shuffle=True, batch_size=1))]
+  data_loaders = [iter(DataLoader(MetaGeneratorDataset(categories=['algebra', 'arithmetic', 'numbers', 'comparison']), shuffle=True, batch_size=1))]
   validation_data_loaders = [iter(DataLoader(MetaGeneratorDataset(categories=['calculus', 'measurement', 'polynomials', 'probability']), shuffle=True, batch_size=1))]
 
   # categories = mdsmgr.get_categories()
@@ -68,8 +68,8 @@ def main(args):
     torch.backends.cudnn.deterministic=True
     torch.backends.cudnn.benchmark = False
 
-  trainer = MetaTrainer(args.meta_batch_size, device=device)
-  trainer.train(data_loaders, tb, num_updates=args.num_updates)
+  trainer = MetaTrainer(args.meta_batch_size, device=device, num_iterations=2.5e4, tb=tb)
+  trainer.train(data_loaders, num_updates=args.num_updates)
 
 if __name__=='__main__':
   set_start_method('spawn')

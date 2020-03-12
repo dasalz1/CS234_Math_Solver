@@ -31,7 +31,7 @@ class GeneratorDataset(Dataset):
 
 class MetaGeneratorDataset(Dataset):
     
-    def __init__(self, categories=["algebra__linear_1d", "probability"], difficulty=0.5, num_iterations=12, batch_size=4, k_shot=5):
+    def __init__(self, categories=["algebra__linear_1d", "probability"], difficulty=0.5, num_iterations=32, batch_size=4, k_shot=5):
         problems = collections.defaultdict(lambda: [])
         initial_modules = modules.train(_make_entropy_fn(difficulty, 1))
         filtered_modules = _filter_and_flatten(categories, initial_modules)
