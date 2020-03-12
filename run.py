@@ -8,6 +8,7 @@ import torch.optim as optim
 import torch
 import numpy as np
 import random
+from dataset import NaïveCurriculumDataset
 
 from tensorboard_utils import Tensorboard
 from tensorboard_utils import tensorboard_event_accumulator
