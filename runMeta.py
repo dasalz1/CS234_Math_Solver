@@ -32,46 +32,45 @@ args = parser.parse_args()
 # d = DataLoader(ds, shuffle=True)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device, "redmond")
-device = 'cpu'
 def main(args):
-	random.seed(12324)
-	np.random.seed(12324)
-	torch.manual_seed(12324)
+  random.seed(12324)
+  np.random.seed(12324)
+  torch.manual_seed(12324)
 
-	num_validation_repos = 100
-	tb = Tensorboard(args.exp_name, unique_name=args.unique_id)
+  num_validation_repos = 100
+  tb = Tensorboard(args.exp_name, unique_name=args.unique_id)
 
-	data_loaders = [iter(DataLoader(MetaGeneratorDataset(categories=["algebra", "probability", "geometry", "calculus"]), shuffle=True, batch_size=1))]
-	validation_data_loaders = [iter(DataLoader(MetaGeneratorDataset(categories=["comparison", "measurement", "arithmetic", "polynomials"]), shuffle=True, batch_size=1))]
+  data_loaders = [iter(DataLoader(MetaGeneratorDataset(categories=['algebra', 'arithmetic', 'numbers', 'comparison']), shuffle=True, batch_size=1))]
+  validation_data_loaders = [iter(DataLoader(MetaGeneratorDataset(categories=['calculus', 'measurement', 'polynomials', 'probability']), shuffle=True, batch_size=1))]
 
-	# categories = mdsmgr.get_categories()
-	# types = mdsmgr.get_types()
-	# categories_datasets = [mdsmgr.build_dataset_from_category_all_types(category, types) for category in categories]
+  # categories = mdsmgr.get_categories()
+  # types = mdsmgr.get_types()
+  # categories_datasets = [mdsmgr.build_dataset_from_category_all_types(category, types) for category in categories]
 
-	# train_categories_datasets = categories_datasets[0:4]
-	# valid_categories_datasets = categories_datasets[4:len(categories_datasets)]
+  # train_categories_datasets = categories_datasets[0:4]
+  # valid_categories_datasets = categories_datasets[4:len(categories_datasets)]
 
-	# data_loaders = [
-	# 	iter(DataLoader(
-	# 		ds, batch_size=16, shuffle=True,
-	# 		collate_fn=question_answer_to_batch_collate_fn, num_workers=0
-	# 	)) for ds in train_categories_datasets
-	# ]
+  # data_loaders = [
+  #   iter(DataLoader(
+  #     ds, batch_size=16, shuffle=True,
+  #     collate_fn=question_answer_to_batch_collate_fn, num_workers=0
+  #   )) for ds in train_categories_datasets
+  # ]
 
-	# validation_data_loaders = [
-	# 	iter(DataLoader(
-	# 		ds, batch_size=16, shuffle=True,
-	# 		collate_fn=question_answer_to_batch_collate_fn, num_workers=0
-	# 	)) for ds in valid_categories_datasets
-	# ]
+  # validation_data_loaders = [
+  #   iter(DataLoader(
+  #     ds, batch_size=16, shuffle=True,
+  #     collate_fn=question_answer_to_batch_collate_fn, num_workers=0
+  #   )) for ds in valid_categories_datasets
+  # ]
 
-	if torch.cuda.is_available:
-		torch.backends.cudnn.deterministic=True
-		torch.backends.cudnn.benchmark = False
+  if torch.cuda.is_available:
+    torch.backends.cudnn.deterministic=True
+    torch.backends.cudnn.benchmark = False
 
-	trainer = MetaTrainer(args.meta_batch_size, device=device)
-	trainer.train(data_loaders, tb, num_updates=args.num_updates)
+  trainer = MetaTrainer(args.meta_batch_size, device=device)
+  trainer.train(data_loaders, tb, num_updates=args.num_updates)
 
 if __name__=='__main__':
-	set_start_method('spawn')
-	main(args)
+  set_start_method('spawn')
+  main(args)

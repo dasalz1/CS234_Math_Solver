@@ -71,7 +71,7 @@ probability_categories = ['swr_p_sequence',
 subcategories = {'algebra': algebra_subcategories, 'arithmetic': arithmetic_subcategories, 
 				'calculus': calculus_subcategories, 'comparison': comparison_subcategories, 
 				'measurement': measurement_categories,
-				'numers': numbers_categories, 'polynomials': polynomials_categories, 
+				'numbers': numbers_categories, 'polynomials': polynomials_categories, 
 				'probability': probability_categories}
 
 

@@ -59,6 +59,9 @@ class MetaGeneratorDataset(Dataset):
 
         query_ques = torch.LongTensor(pd.DataFrame(np_encode_string(str(problem[0]))).fillna(PAD).values)
         query_ans = torch.LongTensor(pd.DataFrame(np_encode_string(str(problem[1]))).fillna(PAD).values)
+        query_ques.view(1, -1)
+        query_ans.view(1, -1)
+
         for p_t in problem_threads:
             p_t.join()
 
