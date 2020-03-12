@@ -10,6 +10,8 @@ from dataset import batch_collate_fn, DeepCurriculumDataset
 from old_dataset import MathDatasetManager, question_answer_to_batch_collate_fn
 from torch.utils.data import DataLoader
 from parameters import CUDA_VISIBLE_DEVICES
+from MathConstants import full_categories
+from curriculumModel import CurriculumNetwork
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--exp_name", default='math_ds_dcl', type=str)
@@ -39,15 +41,12 @@ def init_seed_and_devices():
     return device
 
 def main(args):
-    # Parameters
+    # User parameters
     data_loader_batch_size = 4
     num_iterations = 1.e5
-
-    # Initialization
-    device = init_seed_and_devices()
-    args = parser.parse_args()
-    tb = Tensorboard(args.exp_name, unique_name=args.unique_id)
-    mdsmgr = MathDatasetManager(math_dataset_file_path)
+    categories = full_categories
+    mean_accuracy_by_category = np.zeros_like(categories)
+    curriculum_step_length = 16
 
     # Determine exp_name and unique_id
     exp_name = args.exp_name
@@ -59,7 +58,13 @@ def main(args):
         exp_name = "_full_mle_rl"
     unique_id = args.unique_id + "_random_seed_68492"
 
-    #Get data categories and types from static dataset
+    # Initialization
+    device = init_seed_and_devices()
+    args = parser.parse_args()
+    tb = Tensorboard(args.exp_name, unique_name=args.unique_id)
+    mdsmgr = MathDatasetManager(math_dataset_file_path)
+
+    # Get data categories and types from static dataset
     categories = mdsmgr.get_categories()
     types = mdsmgr.get_types()
 
@@ -76,23 +81,35 @@ def main(args):
         checkpoint_interval = 100
         collate_fn = batch_collate_fn
 
-    # Create dataset and dataloader
-    curriculum_dataset = DeepCurriculumDataset('''model performance''')
-    curriculum_data_loader = DataLoader(
-        curriculum_dataset, batch_size=data_loader_batch_size, shuffle=True,
-        collate_fn=batch_collate_fn, num_workers=len(CUDA_VISIBLE_DEVICES))
-
-    # Create model, scheduler, trainer, and optimizer
-    # TODO: Split by RL/MLE here? Ex. different models?
+    # Create teacher and student model and optimizers
     # TODO: nn.DataParallel helpful?
-    model = torch.nn.DataParallel(Policy_Network().to(device))#Policy_Network().to(device)
-    curriculum_trainer = CurriculumTrainer(args.use_mle_only, args.use_rl_only, device)
-    optimizer = optim.Adam(model.parameters(), lr=6e-4, betas=(0.9, 0.995), eps=1e-8)
-    scheduler = optim.lr_scheduler.MultiStepLR(optimizer,
+    student_model = torch.nn.DataParallel(Policy_Network().to(device))  # Policy_Network().to(device)
+    teacher_model = CurriculumNetwork(len(categories))
+    student_optimizer = optim.Adam(student_model.parameters(), lr=6.e-4, betas=(0.9, 0.995), eps=1e-8)
+    teacher_optimizer = optim.Adam(teacher_model.parameters(), lr=4.e-2, betas=(0.9, 0.995), eps=1e-8)
+    student_scheduler = optim.lr_scheduler.MultiStepLR(student_optimizer,
                                                milestones=[round(0.25 * num_iterations), round(0.5 * num_iterations),
                                                            round(0.75 * num_iterations)], gamma=0.1)
 
-    curriculum_trainer.train(curriculum_data_loader, model, optimizer, scheduler, tb)
+    # Periodically create a new DCL dataset but with updated performance info, so teacher can adjust curriculum
+    num_curriculum_steps = round(num_iterations / curriculum_step_length)
+    for curriculum_step in range(num_curriculum_steps):
+        teacher_optimizer.zero_grad()
+        # Create dataset and dataloader
+        # TODO: num_iterations and batch_size okay here? Were hard-coded to 12 and 4 before, not sure why.
+        # TODO: Is there a difference between data_loader_batch_size and batch_size?
+        curriculum_dataset = DeepCurriculumDataset(categories, mean_accuracy_by_category, difficulty=0.5,
+                                                   num_iterations=num_iterations, batch_size=batch_size, model=teacher_model)
+        curriculum_data_loader = DataLoader(curriculum_dataset, batch_size=data_loader_batch_size, shuffle=True,
+                                            collate_fn=collate_fn, num_workers=len(CUDA_VISIBLE_DEVICES))
+        # Create scheduler, trainer, and optimizer
+        # TODO: Split by RL/MLE here? Ex. separate model architectures?
+        curriculum_trainer = CurriculumTrainer(args.use_mle_only, args.use_rl_only, device)
+        total_loss = curriculum_trainer.train(curriculum_data_loader, student_model, teacher_model, student_optimizer, teacher_optimizer, student_scheduler, tb, epochs=epochs, checkpoint_interval=checkpoint_interval, iterations=curriculum_step * curriculum_step_length)
+        total_loss.backward()
+        torch.nn.utils.clip_grad_norm_(teacher_model.parameters(), 0.1)
+        teacher_optimizer.step()
+        # TODO (MAST): backpropagate teacher model based on adapted model's performance on real data, not on generated data
 
 if __name__ == '__main__':
     main(args)
