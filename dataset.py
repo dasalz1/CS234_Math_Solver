@@ -57,11 +57,8 @@ class MetaGeneratorDataset(Dataset):
         
         problem = sample_from_module(sample_module, show_dropped=False)[0]
 
-        query_ques = torch.LongTensor(pd.DataFrame(np_encode_string(str(problem[0]))).fillna(PAD).values)
-        query_ans = torch.LongTensor(pd.DataFrame(np_encode_string(str(problem[1]))).fillna(PAD).values)
-        query_ques.view(1, -1)
-        query_ans.view(1, -1)
-
+        query_ques = torch.LongTensor(pd.DataFrame(np_encode_string(str(problem[0]))).fillna(PAD).values.reshape(1, -1))
+        query_ans = torch.LongTensor(pd.DataFrame(np_encode_string(str(problem[1]))).fillna(PAD).values.reshape(1, -1))
         for p_t in problem_threads:
             p_t.join()
 
@@ -76,15 +73,14 @@ class NaïveCurriculumDataset(Dataset):
 
     def __init__(self, categories=["algebra", "probability"], num_iterations=12, batch_size=4):
         self.categories = categories
-        self.num_iterations = int(num_iterations * batch_size)
+        self.total_iterations = int(num_iterations * batch_size)
         self.current_iteration = 0
 
     def __len__(self):
-        return self.num_iterations
+        return self.total_iterations
 
     def __getitem__(self, idx):
-        states = self.categories
-        difficulty = self.current_iteration / self.num_iterations
+        difficulty = self.current_iteration / self.total_iterations
         initial_modules = modules.train(_make_entropy_fn(difficulty, 1))
         filtered_modules = _filter_and_flatten(self.categories, initial_modules)
         self.sampled_modules = list(six.iteritems(filtered_modules))
@@ -96,7 +92,30 @@ class NaïveCurriculumDataset(Dataset):
         self.current_iteration += 1
         return ques, anws
         
+class DeepCurriculumDataset(Dataset):
+    def __init__(self, categories, mean_accuracy_by_category, difficulty=0.5, num_iterations = 12, batch_size = 4, model = None):
+        assert(len(self.categories) == len(mean_accuracy_by_category))
+        self.categories = categories
+        self.total_iterations = int(num_iterations * batch_size)
+        self.current_iteration = 0
 
+        assert (np.sum(self.category_probabilities) == 1)
+        self.category_probabilities = self.model.forward(mean_accuracy_by_category)
+        initial_modules = modules.train(_make_entropy_fn(difficulty, 1))
+        filtered_modules = _filter_and_flatten(categories, initial_modules)
+        self.sampled_modules = list(six.iteritems(filtered_modules))
+
+    def __len__(self):
+        return self.total_iterations
+
+    def __getitem__(self, idx):
+        # TODO: Following line could have list shaping/access issues? Should review torch.multinomial and sample_from_module functions definitions
+        # Also, can Torch backprop through multinomial stochasticity in the first place?
+        problem = sample_from_module(self.sampled_modules[torch.multinomial(self.category_probabilities, 1)[0]], show_dropped=False)[0]
+        # converts to tokens and adds BOS and EOS tokens
+        ques, anws = np_encode_string(str(problem[0])), np_encode_string(str(problem[1]))
+
+        return ques, anws
 
 
 def batch_collate_fn(values):

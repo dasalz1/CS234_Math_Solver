@@ -40,7 +40,7 @@ def main(args):
   num_validation_repos = 100
   tb = Tensorboard(args.exp_name, unique_name=args.unique_id)
 
-  data_loaders = [iter(DataLoader(MetaGeneratorDataset(categories=['algebra', 'arithmetic', 'numbers', 'comparison']), shuffle=True, batch_size=1))]
+  data_loaders = [iter(DataLoader(MetaGeneratorDataset(categories=['algebra', 'arithmetic', 'numbers', 'comparison'], num_iterations=1, batch_size=4, k_shot=5), shuffle=True, batch_size=1))]
   validation_data_loaders = [iter(DataLoader(MetaGeneratorDataset(categories=['calculus', 'measurement', 'polynomials', 'probability']), shuffle=True, batch_size=1))]
 
   # categories = mdsmgr.get_categories()

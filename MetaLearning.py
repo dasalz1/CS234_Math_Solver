@@ -25,7 +25,6 @@ class Learner(nn.Module):
     super(Learner, self).__init__()
     print(gpu)
     self.model = Policy_Network(data_parallel=False)
-    saved_checkpoint = torch.load("./checkpoint.pth")
     self.model.load_state_dict(saved_checkpoint['model'], strict=False)
     if process_id == 0:
       optim_params = (self.model.parameters(),) + optim_params
@@ -67,11 +66,11 @@ class Learner(nn.Module):
     self.optimizer.zero_grad()
     dummy_query_x, dummy_query_y = temp_data
     print(" ")
-    action_probs = self.model(src_seq=dummy_query_x[0, :], trg_seq=dummy_query_y[0, :1])
+    action_probs = self.model(src_seq=dummy_query_x, trg_seq=dummy_query_y)
     m = Categorical(F.softmax(action_probs, dim=-1))
     actions = m.sample().reshape(-1, 1)
-    trg_t = batch_as[0, 1].reshape(-1, 1)
-    dummy_loss = -F.cross_entropy(action_probs, trg_t.reshape(-1), ignore_index=0, reduction='none').reshape(-1, 1).sum()
+    trg_t = dummy_query_y[:, :1]
+    dummy_loss = -F.cross_entropy(action_probs, trg_t.reshape(-1), ignore_index=0, reduction='none').sum()
     print(" ")
     hooks = self._hook_grads(all_grads)
 
@@ -180,7 +179,6 @@ class Learner(nn.Module):
       for i in range(num_updates):
         self.meta_optimizer.zero_grad()
         loss, _ = self.policy_batch_loss(support_x, support_y)
-        loss = Variable(loss, requires_grad = True)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
         self.meta_optimizer.step()
@@ -208,7 +206,7 @@ class MetaTrainer:
 
     self.meta_learners = [Learner(process_id=process_id, gpu=process_id if device is not 'cpu' else 'cpu', world_size=world_size, model_params=model_params) for process_id in range(world_size)]
     # gpu backend instead of gloo
-    self.backend = "gloo"
+    self.backend = "nccl"#"gloo"
     
   def init_process(self, process_id, data_queue, data_event, process_event, num_updates, tb, address='localhost', port='29500'):
     os.environ['MASTER_ADDR'] = address
@@ -242,8 +240,8 @@ class MetaTrainer:
       process_event.clear()
       tasks = np.random.randint(0, num_tasks, (self.world_size))
       for task in tasks:
-        # place holder for sampling data from dataset
         task_data = next(data_loaders[task])
+        # place holder for sampling data from dataset
         data_queue.put((task_data[0].numpy()[0], task_data[1].numpy()[0], 
                 task_data[2].numpy()[0], task_data[3].numpy()[0]))
       data_event.set()
