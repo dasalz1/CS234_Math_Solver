@@ -22,8 +22,13 @@ class GeneratorDataset(Dataset):
         return self.num_iterations
 
     def __getitem__(self, idx):
+        if idx == -1:
+            print("Repeating data here")
+        try:
+            problem = sample_from_module(self.sampled_modules[np.random.randint(0, len(self.sampled_modules), (1))[0]][1], show_dropped=False)[0]
+        except:
+            return self.__getitem__(-1)
 
-        problem = sample_from_module(self.sampled_modules[np.random.randint(0, len(self.sampled_modules), (1))[0]][1], show_dropped=False)[0]
         # converts to tokens and adds BOS and EOS tokens
         ques, anws = np_encode_string(str(problem[0])), np_encode_string(str(problem[1])) 
 
