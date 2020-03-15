@@ -63,17 +63,14 @@ class Learner(nn.Module):
 
     self.optimizer.zero_grad()
     dummy_query_x, dummy_query_y = temp_data
-    print(" ")
     action_probs = self.model(src_seq=dummy_query_x, trg_seq=dummy_query_y)
     m = Categorical(F.softmax(action_probs, dim=-1))
     actions = m.sample().reshape(-1, 1)
     trg_t = dummy_query_y[:, :1]
     dummy_loss = -F.cross_entropy(action_probs, trg_t.reshape(-1), ignore_index=0, reduction='none').sum()
-    print(" ")
     hooks = self._hook_grads(all_grads)
 
     dummy_loss.backward()
-    print(" ")
     torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
     
     self.optimizer.step()
@@ -151,8 +148,8 @@ class Learner(nn.Module):
     return policy_losses, batch_rewards
 
   def forward(self, num_updates, data_queue, data_event, process_event, tb=None, log_interval=100, checkpoint_interval=10000):
+    data_event.wait()
     while(True):
-      data_event.wait()
       data = data_queue.get()
       dist.barrier(async_op=True)
 
@@ -200,6 +197,7 @@ class Learner(nn.Module):
         self._write_grads(original_state_dict, all_grads, (query_x, query_y))
         # finished batch so can load data again from master
         process_event.set()
+      data_event.wait()
 
 
 class MetaTrainer:
