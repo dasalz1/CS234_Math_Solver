@@ -155,7 +155,7 @@ class Learner(nn.Module):
     policy_losses = (-log_probs * advantages).sum(dim=-1).mean()
     batch_rewards = rewards.sum(dim=-1).mean()
     non_pad_mask = current_as.ne(PAD)
-    avg_n_char = non_pad_mask.mean().item()
+    avg_n_char = non_pad_mask.sum().item()/batch_size
 
     print(avg_n_char)
 
