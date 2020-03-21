@@ -72,9 +72,9 @@ class Learner(nn.Module):
     dummy_query_x, dummy_query_y = temp_data
     action_probs = self.model(src_seq=dummy_query_x, trg_seq=dummy_query_y)
     m = Categorical(F.softmax(action_probs, dim=-1))
-    actions = m.sample().reshape(-1, 1)
+    actions = m.sample().contiguous().view(-1, 1)
     trg_t = dummy_query_y[:, :1]
-    dummy_loss = -F.cross_entropy(action_probs, trg_t.reshape(-1), ignore_index=0, reduction='none').sum()
+    dummy_loss = -F.cross_entropy(action_probs, trg_t.contiguous().view(-1), ignore_index=0, reduction='none').sum()
     hooks = self._hook_grads(all_grads)
 
     dummy_loss.backward()
@@ -113,7 +113,7 @@ class Learner(nn.Module):
     current_as = batch_as[:, :1]
     complete = torch.ones((batch_size, 1)).to(self.device)
     rewards = torch.zeros((batch_size, 0)).to(self.device)
-    values = torch.zeros((batch_size, 0)).to(self.device)
+    # values = torch.zeros((batch_size, 0)).to(self.device)
     log_probs = torch.zeros((batch_size, 0)).to(self.device)
     advantages_mask = torch.ones((batch_size, 0)).to(self.device)
     for t in range(1, max_len_sequence):
@@ -121,14 +121,14 @@ class Learner(nn.Module):
       # action_probs, curr_values = model(src_seq=batch_qs, trg_seq=current_as)
       action_probs = self.model(src_seq=batch_qs, trg_seq=current_as)
       m = Categorical(F.softmax(action_probs, dim=-1))
-      actions = m.sample().reshape(-1, 1)
+      actions = m.sample().contiguous().view(-1, 1)
 
-      trg_t = batch_as[:, t].reshape(-1, 1)
+      trg_t = batch_as[:, t].contiguous().view(-1, 1)
 
       # update decoder output
       current_as = torch.cat((current_as, actions), dim=1)
 
-      curr_log_probs = -F.cross_entropy(action_probs, trg_t.reshape(-1), ignore_index=0, reduction='none').reshape(-1, 1)
+      curr_log_probs = -F.cross_entropy(action_probs, trg_t.contiguous().view(-1), ignore_index=0, reduction='none').contiguous().view(-1, 1)
 
       # calculate reward based on character cross entropy
       curr_rewards = self.calc_reward(actions, trg_t)
@@ -150,9 +150,14 @@ class Learner(nn.Module):
     policy_losses = (-log_probs * advantages).sum(dim=-1).mean()
     batch_rewards = rewards.sum(dim=-1).mean()
 
+    del complete
+    del rewards
+    del log_probs
+    del advantages_mask
+
     return policy_losses, batch_rewards
 
-  def forward(self, num_updates, data_queue, data_event, process_event, tb=None, log_interval=100, checkpoint_interval=10000):
+  def process(self, num_updates, data_queue, data_event, process_event, tb=None, log_interval=100, checkpoint_interval=10000):
     data_event.wait()
     while(True):
       data = data_queue.get()
@@ -180,12 +185,12 @@ class Learner(nn.Module):
       support_x, support_y, query_x, query_y = map(lambda x: torch.LongTensor(x).to(self.device), data)
       for i in range(num_updates):
         self.meta_optimizer.zero_grad()
-        loss, _ = self.policy_batch_loss(support_x, support_y)
+        loss, _ = self(support_x, support_y)#self.policy_batch_loss(support_x, support_y)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
         self.meta_optimizer.step()
 
-      loss, rewards = self.policy_batch_loss(query_x, query_y)
+      loss, rewards = self(query_x, query_y)#self.policy_batch_loss(query_x, query_y)
       if self.process_id == 0: 
         self.trainer.tb_policy_batch(self.tb, rewards, loss, self.num_iter, 0, 1)
 
@@ -203,6 +208,9 @@ class Learner(nn.Module):
         process_event.set()
 
       data_event.wait()
+
+  def forward(self, x_data, y_data):
+    self.policy_batch_loss(x_data, y_data)
 
 
 class MetaTrainer:
