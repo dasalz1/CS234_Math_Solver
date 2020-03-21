@@ -251,6 +251,8 @@ class MetaTrainer:
                 task_data[2].numpy()[0], task_data[3].numpy()[0]))
       data_event.set()
 
+    for _ in range(self.world_size):
+      data_queue.put(None)
+
     for p in processes:
-      p.terminate()
       p.join()
