@@ -6,6 +6,7 @@ from transformer.bart import BartModel
 from transformer.configuration_bart import BartConfig
 from transformer.Constants import PAD, EOS
 import numpy as np
+from torch.distributions import Categorical
 
 from parameters import VOCAB_SIZE, MAX_ANSWER_SIZE, MAX_QUESTION_SIZE
 
