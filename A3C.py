@@ -73,82 +73,13 @@ class Policy_Network(nn.Module):
         #                             trg_embedding=critic_trg_embedding, 
         #                             src_position_enc=critic_src_position, 
         #                             trg_position_enc=critic_trg_position).cuda()
-    def forward(self, src_seq, trg_seq, reg=True, device=None):
-        if reg:
-            action_prob = self.action_transformer(input_ids=src_seq, decoder_input_ids=trg_seq)
-            action_prob = action_prob[:, -1, :]
-            # state_values = self.value_head(src_seq, trg_seq)
+    def forward(self, src_seq, trg_seq):
+        action_prob = self.action_transformer(input_ids=src_seq, decoder_input_ids=trg_seq)
+        action_prob = action_prob[:, -1, :]
+        # state_values = self.value_head(src_seq, trg_seq)
 
-            # return action_prob, state_values
-            return action_prob
-        else:
-            batch_qs = src_seq; batch_as = trg_seq; gamma=0.9
-            batch_size, max_len_sequence = batch_qs.shape[0], batch_as.shape[1]
-            current_as = batch_as[:, :1]
-            complete = torch.ones((batch_size, 1)).to(device)
-            rewards = torch.zeros((batch_size, 0)).to(device)
-            # values = torch.zeros((batch_size, 0)).to(self.device)
-            log_probs = torch.zeros((batch_size, 0)).to(device)
-            advantages_mask = torch.ones((batch_size, 0)).to(device)
-            for t in range(1, max_len_sequence):
-                advantages_mask = torch.cat((advantages_mask, complete), dim=1)
-                # action_probs, curr_values = model(src_seq=batch_qs, trg_seq=current_as)
-                # action_probs = self.model(src_seq=batch_qs, trg_seq=current_as)
-                action_prob = self.action_transformer(input_ids=batch_qs, decoder_input_ids=current_as)
-                action_probs = action_prob[:, -1, :]
-
-                m = Categorical(F.softmax(action_probs, dim=-1))
-                actions = m.sample().contiguous().view(-1, 1)
-
-                trg_t = batch_as[:, t].contiguous().view(-1, 1)
-
-                # update decoder output
-                current_as = torch.cat((current_as, actions), dim=1)
-
-                curr_log_probs = -F.cross_entropy(action_probs, trg_t.contiguous().view(-1), ignore_index=0, reduction='none').contiguous().view(-1, 1)
-
-                # calculate reward based on character cross entropy
-                curr_rewards = self.calc_reward(actions, trg_t)
-
-                # update terms
-                rewards = torch.cat((rewards, curr_rewards), dim=1).to(device)
-                log_probs = torch.cat((log_probs, curr_log_probs), dim=1)
-
-                # if the action taken is EOS or if end of sequence trajectory ends
-                complete *= (1 - ((actions==EOS) | (trg_t==EOS)).float())
-              
-            returns = self.get_returns(rewards, batch_size, gamma, device=device)
-
-            # advantages = returns - values
-            advantages = returns
-            advantages *= advantages_mask
-
-            policy_losses = (-log_probs * advantages).sum(dim=-1).mean()
-            batch_rewards = rewards.sum(dim=-1).mean()
-
-            return policy_losses, batch_rewards
-
-    def get_returns(self, rewards, batch_size, gamma, device, eps=np.finfo(np.float32).eps.item()):
-        T = rewards.shape[1]
-        discounts = torch.tensor(np.logspace(0, T, T, base=gamma, endpoint=False)).view(1, -1).to(device)
-        all_returns = torch.zeros((batch_size, T)).to(device)
-        
-        for t in range(T):
-            temp = (discounts[:, :T-t]*rewards[:, t:]).sum(dim=-1)
-            all_returns[:, t] = temp
-            (all_returns - all_returns.mean(dim=-1).view(-1, 1)) / (all_returns.std(dim=-1).view(-1, 1) + eps)
-      
-        return all_returns
-
-    def calc_reward(self, actions_pred, actions, ignore_index=0, sparse_rewards=False):
-        # sparse rewards or char rewards
-        if sparse_rewards:
-            if actions_pred == EOS and actions == EOS:
-                return torch.ones_like(actions).cuda().float()
-            return torch.zeros_like(actions).cuda().float()
-        else:
-            # 1 if character is correct
-            return (actions_pred==actions).float()
+        # return action_prob, state_values
+        return action_prob
 
 
 

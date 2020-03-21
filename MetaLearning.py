@@ -70,10 +70,8 @@ class Learner(nn.Module):
   def _write_grads(self, original_state_dict, all_grads, temp_data):
     # reload original model before taking meta-gradients
     self.model.load_state_dict(original_state_dict)
-    self.model.to(self.device)
+    # self.model.to(self.device)
     self.model.train()
-
-    torch.cuda.empty_cache()
 
     self.optimizer.zero_grad()
     dummy_query_x, dummy_query_y = temp_data
@@ -159,7 +157,7 @@ class Learner(nn.Module):
 
     return policy_losses, batch_rewards
 
-  def forward(self, num_updates, data_queue, data_event, process_event, tb=None, log_interval=100, checkpoint_interval=10000):
+  def forward(self, num_updates, data_queue, data_event, process_event, tb=None, log_interval=100, checkpoint_interval=10000, free_interval=50):
     data_event.wait()
     while(True):
       data = data_queue.get()
@@ -174,6 +172,9 @@ class Learner(nn.Module):
       if self.process_id == 0 and self.num_iter != 0 and self.num_iter % checkpoint_interval == 0:
         self.save_checkpoint(model, optimizer, self.num_iter)
 
+      if num_iter != 0 and self.num_iter % free_interval == 0:
+        torch.cuda.empty_cache()
+
       # broadcast weights from master process to all others and save them to a detached dictionary for loadinglater
       for k, v in self.model.state_dict().items():
         if self.process_id == 0:
@@ -187,12 +188,12 @@ class Learner(nn.Module):
       support_x, support_y, query_x, query_y = map(lambda x: torch.LongTensor(x).to(self.device), data)
       for i in range(num_updates):
         self.meta_optimizer.zero_grad()
-        loss, _ = self.model(support_x, support_y, reg=False, device=self.device)#self.policy_batch_loss(support_x, support_y)
+        loss, _ = self.policy_batch_loss(support_x, support_y)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
         self.meta_optimizer.step()
 
-      loss, rewards = self.model(query_x, query_y, reg=False, device=self.device)#self(query_x, query_y)#self.policy_batch_loss(query_x, query_y)
+      loss, rewards = self.policy_batch_loss(query_x, query_y)
       if self.process_id == 0: 
         self.trainer.tb_policy_batch(self.tb, rewards, loss, self.num_iter, 0, 1)
 
