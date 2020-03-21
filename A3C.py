@@ -81,6 +81,7 @@ class Policy_Network(nn.Module):
             # return action_prob, state_values
             return action_prob
         else:
+            batch_qs = src_seq; batch_as = trg_seq; gamma=0.9
             batch_size, max_len_sequence = batch_qs.shape[0], batch_as.shape[1]
             current_as = batch_as[:, :1]
             complete = torch.ones((batch_size, 1)).to(device)
