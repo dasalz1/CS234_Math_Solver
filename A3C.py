@@ -92,7 +92,10 @@ class Policy_Network(nn.Module):
             for t in range(1, max_len_sequence):
                 advantages_mask = torch.cat((advantages_mask, complete), dim=1)
                 # action_probs, curr_values = model(src_seq=batch_qs, trg_seq=current_as)
-                action_probs = self.model(src_seq=batch_qs, trg_seq=current_as)
+                # action_probs = self.model(src_seq=batch_qs, trg_seq=current_as)
+                action_prob = self.action_transformer(input_ids=batch_qs, decoder_input_ids=current_as)
+                action_probs = action_prob[:, -1, :]
+
                 m = Categorical(F.softmax(action_probs, dim=-1))
                 actions = m.sample().contiguous().view(-1, 1)
 
