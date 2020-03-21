@@ -165,7 +165,7 @@ class Learner(nn.Module):
 
     return policy_losses, batch_rewards, tb_rewards
 
-  def forward(self, num_updates, data_queue, data_event, process_event, tb=None, log_interval=100, checkpoint_interval=10000, free_interval=50):
+  def forward(self, num_updates, data_queue, data_event, process_event, tb=None, log_interval=100, checkpoint_interval=10000, free_interval=25):
     data_event.wait()
     try:
       while(True):
