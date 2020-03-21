@@ -154,22 +154,7 @@ class Learner(nn.Module):
 
     policy_losses = (-log_probs * advantages).sum(dim=-1).mean()
     batch_rewards = rewards.sum(dim=-1).mean()
-    
-    # non_pad_mask = current_as.ne(PAD)
-    # avg_n_char = non_pad_mask.sum(dim=-1).item()/batch_size
-
-    temp1 = rewards.sum(dim=-1)
-    print(temp1.shape)
-    temp2 = current_as.ne(PAD).sum(dim=-1)
-    print(temp2.shape)
-    temp3 = torch.div(temp1, temp2)
-    print(temp3.shape)
-    # tb_rewards = float(np.sum(rewards.sum(dim=-1).item() / current_as.ne(PAD).sum(dim=-1).item()))
-    temp4 = temp3.mean().item()
-    print(temp4)
-    # print(current_as.ne(PAD).sum(dim=-1).item())
-
-    # sum(tb_rewards)
+    tb_rewards = torch.div(rewards.sum(dim=-1), current_as.ne(PAD).sum(dim=-1)).mean().item()
 
     return policy_losses, batch_rewards, tb_rewards
 
@@ -214,8 +199,8 @@ class Learner(nn.Module):
 
         loss, rewards, tb_rewards = self.policy_batch_loss(query_x, query_y)
         
-        if self.process_id == 0: 
-          self.trainer.tb_policy_batch(self.tb, tb_rewards, loss/avg_n_char, self.num_iter, 0, 1)
+        if self.process_id == 0
+          self.trainer.tb_policy_batch(self.tb, tb_rewards, loss, self.num_iter, 0, 1)
 
         # loss, pred = self.model(query_x, query_y)
         all_grads = autograd.grad(loss, self.model.parameters())
