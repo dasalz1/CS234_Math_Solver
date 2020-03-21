@@ -158,11 +158,11 @@ class Learner(nn.Module):
     # non_pad_mask = current_as.ne(PAD)
     # avg_n_char = non_pad_mask.sum(dim=-1).item()/batch_size
 
-    temp1 = rewards.sum(dim=-1).item()
+    temp1 = rewards.sum(dim=-1)
     print(temp1.shape)
-    temp2 = current_as.ne(PAD).sum(dim=-1).item()
+    temp2 = current_as.ne(PAD).sum(dim=-1)
     print(temp2.shape)
-    temp3 = temp1/temp2
+    temp3 = torch.div(temp1/temp2)
     print(temp3.shape)
     tb_rewards = float(np.sum(rewards.sum(dim=-1).item() / current_as.ne(PAD).sum(dim=-1).item()))
     # print(current_as.ne(PAD).sum(dim=-1).item())
