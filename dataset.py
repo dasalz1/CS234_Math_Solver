@@ -13,6 +13,7 @@ from parameters import MAX_QUESTION_SIZE, MAX_ANSWER_SIZE
 class GeneratorDataset(Dataset):
     
     def __init__(self, categories=["algebra__linear_1d", "probability"], difficulty=0.5, num_iterations=12, batch_size=4):
+        super(GeneratorDataset, self).__init__()
         problems = collections.defaultdict(lambda: [])
         initial_modules = modules.train(_make_entropy_fn(difficulty, 1))
         filtered_modules = _filter_and_flatten(categories, initial_modules)
@@ -33,6 +34,7 @@ class GeneratorDataset(Dataset):
 class MetaGeneratorDataset(Dataset):
     
     def __init__(self, categories=["algebra__linear_1d", "probability"], difficulty=0.5, num_iterations=32, query_batch_size=4, k_shot=5):
+        super(MetaGeneratorDataset, self).__init__()
         problems = collections.defaultdict(lambda: [])
         initial_modules = modules.train(_make_entropy_fn(difficulty, 1))
         filtered_modules = _filter_and_flatten(categories, initial_modules)
@@ -86,6 +88,7 @@ class MetaGeneratorDataset(Dataset):
 class NaïveCurriculumDataset(Dataset):
 
     def __init__(self, categories=["algebra", "probability"], num_iterations=12, batch_size=4):
+        super(NaïveCurriculumDataset, self).__init__()
         self.categories = categories
         self.total_iterations = int(num_iterations * batch_size)
         self.current_iteration = 0
