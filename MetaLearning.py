@@ -163,7 +163,9 @@ class Learner(nn.Module):
       while(True):
         data = data_queue.get()
 
-        if data is None: break
+        if data is None: 
+          if self.processes_id == 0: self.save_checkpoint(self.model, self.optimizer, 'final_model')
+          break
         dist.barrier(async_op=True)
 
         if self.process_id == 0:
@@ -213,7 +215,8 @@ class Learner(nn.Module):
         self.num_iter += 1
         data_event.wait()
     except KeyboardInterrupt:
-      if self.processes_id == 0: self.save_checkpoint(self.model, self.optimizer, -1)
+      if self.processes_id == 0: self.save_checkpoint(self.model, self.optimizer, 'final_model')
+
 
   # def forward(self, x_data, y_data):
     # pass#self.policy_batch_loss(x_data, y_data)
