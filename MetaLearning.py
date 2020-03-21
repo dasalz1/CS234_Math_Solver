@@ -181,6 +181,7 @@ class Learner(nn.Module):
 
         # self.model.to(self.device)
         self.model.train()
+
         if self.num_iter != 0 and self.num_iter % free_interval == 0:
           torch.cuda.empty_cache()
 
@@ -205,14 +206,14 @@ class Learner(nn.Module):
           all_grads[idx].data = all_grads[idx].data / self.world_size
 
         if self.process_id == 0:
-          self.num_iter += 1
           self._write_grads(original_state_dict, all_grads, (query_x, query_y))
           # finished batch so can load data again from master
           process_event.set()
 
+        self.num_iter += 1
         data_event.wait()
     except KeyboardInterrupt:
-      self.save_checkpoint(self.model, self.optimizer, -1)
+      if self.processes_id == 0: self.save_checkpoint(self.model, self.optimizer, -1)
 
   # def forward(self, x_data, y_data):
     # pass#self.policy_batch_loss(x_data, y_data)
