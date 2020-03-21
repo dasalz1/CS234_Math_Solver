@@ -28,7 +28,7 @@ class Learner(nn.Module):
     print(gpu)
     self.model = Policy_Network(data_parallel=False)
     saved_checkpoint = torch.load("./checkpoint.pth")
-    self.model.load_state_dict(saved_checkpoint['model'], strict=False)
+    self.model.load_state_dict(saved_checkpoint['model'], strict=True)
     if process_id == 0:
       optim_params = (self.model.parameters(),) + optim_params
       self.optimizer = optimizer(*optim_params)
@@ -244,7 +244,8 @@ class MetaTrainer:
       process_event.wait()
       process_event.clear()
       for task in range(self.world_size):
-        task_data = data_loader.get_sample()
+        # task_data = data_loader.get_sample()
+        task_data = (np.random.randint(0, 20000, (1, 45)), np.random.randint(0, 20000, (1, 5)), np.random.randint(0, 20000, (10, 45)), np.random.randint(0, 20000, (10, 5)))
         # place holder for sampling data from dataset
         data_queue.put((task_data[0], task_data[1], 
                 task_data[2], task_data[3]))
