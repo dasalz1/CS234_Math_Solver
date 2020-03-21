@@ -7,6 +7,7 @@ from transformer.Constants import PAD, EOS, BOS, UNK
 from mathematics_dataset.modules import modules
 from utils import np_encode_string
 from threading import Thread
+from parameters import MAX_QUESTION_SIZE, MAX_ANSWER_SIZE
 
 
 class GeneratorDataset(Dataset):
@@ -22,13 +23,8 @@ class GeneratorDataset(Dataset):
         return self.num_iterations
 
     def __getitem__(self, idx):
-        if idx == -1:
-            print("Repeating data here")
-        try:
-            problem = sample_from_module(self.sampled_modules[np.random.randint(0, len(self.sampled_modules), (1))[0]][1], show_dropped=False)[0]
-        except:
-            return self.__getitem__(-1)
 
+        problem = sample_from_module(self.sampled_modules[np.random.randint(0, len(self.sampled_modules), (1))[0]][1], show_dropped=False)[0]
         # converts to tokens and adds BOS and EOS tokens
         ques, anws = np_encode_string(str(problem[0])), np_encode_string(str(problem[1])) 
 
@@ -36,13 +32,14 @@ class GeneratorDataset(Dataset):
 
 class MetaGeneratorDataset(Dataset):
     
-    def __init__(self, categories=["algebra__linear_1d", "probability"], difficulty=0.5, num_iterations=12, batch_size=4, k_shot=5):
+    def __init__(self, categories=["algebra__linear_1d", "probability"], difficulty=0.5, num_iterations=32, query_batch_size=4, k_shot=5):
         problems = collections.defaultdict(lambda: [])
         initial_modules = modules.train(_make_entropy_fn(difficulty, 1))
         filtered_modules = _filter_and_flatten(categories, initial_modules)
         self.sampled_modules = list(six.iteritems(filtered_modules))
-        self.num_iterations = int(num_iterations * batch_size)
+        self.num_iterations = num_iterations
         self.k_shot = k_shot
+        self.query_batch_size = query_batch_size
 
     def __len__(self):
         return self.num_iterations
@@ -53,24 +50,36 @@ class MetaGeneratorDataset(Dataset):
         problem_data.append(support_problem)
 
     def __getitem__(self, idx):
-        problem_data = []
+        query_data = []
+        supp_data = []
         problem_threads = []
         sample_module = self.sampled_modules[np.random.randint(0, len(self.sampled_modules))][1]
+
+        for _ in range(self.query_batch_size):
+            problem_threads.append(Thread(target=self.supportProblem, args=(sample_module, query_data,)))
+            problem_threads[-1].start()
+
         for _ in range(self.k_shot):
-            problem_threads.append(Thread(target=self.supportProblem, args=(sample_module, problem_data,)))
+            problem_threads.append(Thread(target=self.supportProblem, args=(sample_module, supp_data,)))
             problem_threads[-1].start()
         
-        problem = sample_from_module(sample_module, show_dropped=False)[0]
+        # problem = sample_from_module(sample_module, show_dropped=False)[0]
 
-        query_ques = torch.LongTensor(pd.DataFrame(np_encode_string(str(problem[0]))).fillna(PAD).values.reshape(1, -1))
-        query_ans = torch.LongTensor(pd.DataFrame(np_encode_string(str(problem[1]))).fillna(PAD).values.reshape(1, -1))
+        # support_ques = torch.LongTensor(pd.DataFrame(np_encode_string(str(problem[0]))).fillna(PAD).values.reshape(1, -1))
+        # support_ans = torch.LongTensor(pd.DataFrame(np_encode_string(str(problem[1]))).fillna(PAD).values.reshape(1, -1))
+        
         for p_t in problem_threads:
             p_t.join()
 
-        support_ques, support_ans = zip(*problem_data)
+        query_ques, query_ans = zip(*query_data)
 
-        support_ques = torch.LongTensor(pd.DataFrame(support_ques).fillna(PAD).values)
-        support_ans = torch.LongTensor(pd.DataFrame(support_ans).fillna(PAD).values)
+        query_ques = torch.LongTensor(pd.DataFrame(query_ques).fillna(PAD).values).contiguous().view(self.query_batch_size, MAX_QUESTION_SIZE)
+        query_ans = torch.LongTensor(pd.DataFrame(query_ans).fillna(PAD).values).contiguous().view(self.query_batch_size, MAX_ANSWER_SIZE)
+
+        query_ques, query_ans = zip(*supp_data)
+
+        query_ques = torch.LongTensor(pd.DataFrame(query_ques).fillna(PAD).values).contiguous().view(self.k_shot, MAX_QUESTION_SIZE)
+        query_ans = torch.LongTensor(pd.DataFrame(query_ans).fillna(PAD).values).contiguous().view(self.k_shot, MAX_ANSWER_SIZE)
         
         return support_ques, support_ans, query_ques, query_ans
 

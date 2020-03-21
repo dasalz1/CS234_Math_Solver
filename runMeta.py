@@ -9,6 +9,13 @@ from dataset import MetaGeneratorDataset
 from datetime import date
 from parameters import VOCAB_SIZE, MAX_QUESTION_SIZE
 
+
+subcategories = {'algebra': algebra_subcategories, 'arithmetic': arithmetic_subcategories, 
+        'calculus': calculus_subcategories, 'comparison': comparison_subcategories, 
+        'measurement': measurement_categories,
+        'numbers': numbers_categories, 'polynomials': polynomials_categories, 
+        'probability': probability_categories}
+
 from torch.multiprocessing import set_start_method
 
 parser = argparse.ArgumentParser()
@@ -24,7 +31,9 @@ parser.add_argument("--inner_dimension", default=2048, type=int)
 parser.add_argument("--meta_batch_size", default=4, type=int)
 parser.add_argument("--epochs", default=10, type=int)
 parser.add_argument("--num_updates", default=10, type=int)
-parser.add_argument("--k_shot", default=5, type=int)
+parser.add_argument("--k_shot", default=1, type=int)
+parser.add_argument("--query_batch_size", default=10, type=int)
+parser.add_argument("--num_iterations", default=100000, type=int)
 args = parser.parse_args()
 
 # mdsmgr = MathDatasetManager("mathematics_dataset-v1.0")
@@ -40,36 +49,15 @@ def main(args):
   num_validation_repos = 100
   tb = Tensorboard(args.exp_name, unique_name=args.unique_id)
 
-  data_loaders = [iter(DataLoader(MetaGeneratorDataset(categories=["algebra"], num_iterations=1, batch_size=1, k_shot=1), shuffle=True, batch_size=1))]
-  validation_data_loaders = [iter(DataLoader(MetaGeneratorDataset(categories=["arithmetic", "probability"]), shuffle=True, batch_size=1))]
-
-  # categories = mdsmgr.get_categories()
-  # types = mdsmgr.get_types()
-  # categories_datasets = [mdsmgr.build_dataset_from_category_all_types(category, types) for category in categories]
-
-  # train_categories_datasets = categories_datasets[0:4]
-  # valid_categories_datasets = categories_datasets[4:len(categories_datasets)]
-
-  # data_loaders = [
-  #   iter(DataLoader(
-  #     ds, batch_size=16, shuffle=True,
-  #     collate_fn=question_answer_to_batch_collate_fn, num_workers=0
-  #   )) for ds in train_categories_datasets
-  # ]
-
-  # validation_data_loaders = [
-  #   iter(DataLoader(
-  #     ds, batch_size=16, shuffle=True,
-  #     collate_fn=question_answer_to_batch_collate_fn, num_workers=0
-  #   )) for ds in valid_categories_datasets
-  # ]
+  data_loaders = [iter(DataLoader(MetaGeneratorDataset(categories=['algebra', 'arithmetic', 'numbers', 'comparison']), shuffle=True, k_shot=args.k_shot, num_iteration=args.num_iterations, query_batch_size=args.query_batch_size))]
+  validation_data_loaders = [iter(DataLoader(MetaGeneratorDataset(categories=['calculus', 'measurement', 'polynomials', 'probability']), shuffle=True, batch_size=1))]
 
   if torch.cuda.is_available:
     torch.backends.cudnn.deterministic=True
     torch.backends.cudnn.benchmark = False
 
-  trainer = MetaTrainer(args.meta_batch_size, device=device)
-  trainer.train(data_loaders, tb, num_updates=args.num_updates)
+  trainer = MetaTrainer(args.meta_batch_size, device=device, num_iterations=args.num_iterations, tb=tb)
+  trainer.train(data_loaders, num_updates=args.num_updates)
 
 if __name__=='__main__':
   set_start_method('spawn')
