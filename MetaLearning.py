@@ -28,8 +28,8 @@ class Learner(nn.Module):
     print(gpu)
     self.model = Policy_Network(data_parallel=False)
     saved_checkpoint = torch.load("./checkpoint.pth")
-    model_dict = savevd_checkpoint['model']
-    for k, v in model_dict.items():
+    model_dict = saved_checkpoint['model']
+    for k, v in list(model_dict.items()):
       kn = k.replace('module.', '')
       model_dict[kn] = v
       del model_dict[k]
