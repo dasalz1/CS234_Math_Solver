@@ -240,7 +240,7 @@ class MetaTrainer:
                           tb if process_id == 0 else None)))
       processes[-1].start()
 
-    for num_iter in tqdm(range(num_iters), mininterval=2, leave=False):
+    for num_iter in tqdm(range(num_iterations), mininterval=2, leave=False):
       process_event.wait()
       process_event.clear()
       tasks = np.random.randint(0, num_tasks, (self.world_size))
