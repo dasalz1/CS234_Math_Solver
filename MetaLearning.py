@@ -190,7 +190,7 @@ class Learner(nn.Module):
         self.trainer.tb_policy_batch(self.tb, rewards, loss, self.num_iter, 0, 1)
 
       # loss, pred = self.model(query_x, query_y)
-      all_grads = list(autograd.grad(loss, self.model.parameters()))
+      all_grads = autograd.grad(loss, self.model.parameters())
 
       for idx in range(len(all_grads)):
         dist.reduce(all_grads[idx].data, 0, op=dist.ReduceOp.SUM, async_op=True)
