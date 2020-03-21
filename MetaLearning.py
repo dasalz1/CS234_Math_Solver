@@ -154,8 +154,12 @@ class Learner(nn.Module):
 
     policy_losses = (-log_probs * advantages).sum(dim=-1).mean()
     batch_rewards = rewards.sum(dim=-1).mean()
+    non_pad_mask = current_as.ne(PAD)
+    avg_n_char = non_pad_mask.mean().item()
 
-    return policy_losses, batch_rewards
+    print(avg_n_char)
+
+    return policy_losses, batch_rewards, avg_n_char
 
   def forward(self, num_updates, data_queue, data_event, process_event, tb=None, log_interval=100, checkpoint_interval=10000, free_interval=10):
     data_event.wait()
@@ -191,14 +195,14 @@ class Learner(nn.Module):
         support_x, support_y, query_x, query_y = map(lambda x: torch.LongTensor(x).to(self.device), data)
         for i in range(num_updates):
           self.meta_optimizer.zero_grad()
-          loss, _ = self.policy_batch_loss(support_x, support_y)
+          loss, _, _ = self.policy_batch_loss(support_x, support_y)
           loss.backward()
           torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
           self.meta_optimizer.step()
 
-        loss, rewards = self.policy_batch_loss(query_x, query_y)
+        loss, rewards, avg_n_char = self.policy_batch_loss(query_x, query_y)
         if self.process_id == 0: 
-          self.trainer.tb_policy_batch(self.tb, rewards, loss, self.num_iter, 0, 1)
+          self.trainer.tb_policy_batch(self.tb, rewards/avg_n_char, loss, self.num_iter, 0, 1)
 
         # loss, pred = self.model(query_x, query_y)
         all_grads = autograd.grad(loss, self.model.parameters())
