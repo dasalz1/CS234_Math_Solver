@@ -75,13 +75,13 @@ class MetaGeneratorDataset(Dataset):
 
         query_ques, query_ans = zip(*query_data)
 
-        query_ques = torch.LongTensor(pd.DataFrame(query_ques).fillna(PAD).values).contiguous().view(self.query_batch_size, -1)
-        query_ans = torch.LongTensor(pd.DataFrame(query_ans).fillna(PAD).values).contiguous().view(self.query_batch_size, -1)
+        query_ques = pd.DataFrame(query_ques).fillna(PAD).values.reshape(self.query_batch_size, -1)
+        query_ans = pd.DataFrame(query_ans).fillna(PAD).values.reshape(self.query_batch_size, -1)
 
         support_ques, support_ans = zip(*supp_data)
 
-        support_ques = torch.LongTensor(pd.DataFrame(support_ques).fillna(PAD).values).contiguous().view(self.k_shot, -1)
-        support_ans = torch.LongTensor(pd.DataFrame(support_ans).fillna(PAD).values).contiguous().view(self.k_shot, -1)
+        support_ques = pd.DataFrame(support_ques).fillna(PAD).values.reshape(self.k_shot, -1)
+        support_ans = pd.DataFrame(support_ans).fillna(PAD).values.reshape(self.k_shot, -1)
         
         return support_ques, support_ans, query_ques, query_ans
 

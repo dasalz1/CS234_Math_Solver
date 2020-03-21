@@ -64,7 +64,7 @@ class Learner(nn.Module):
 
   def _write_grads(self, original_state_dict, all_grads, temp_data):
     # reload original model before taking meta-gradients
-    self.model.load_state_dict(self.original_state_dict)
+    self.model.load_state_dict(original_state_dict)
     self.model.to(self.device)
     self.model.train()
 
@@ -170,7 +170,7 @@ class Learner(nn.Module):
       # broadcast weights from master process to all others and save them to a detached dictionary for loadinglater
       for k, v in self.model.state_dict().items():
         if self.process_id == 0:
-          self.original_state_dict[k] = v.clone().detach()
+          original_state_dict[k] = v.clone().detach()
         dist.broadcast(v, src=0, async_op=True)
 
       self.model.to(self.device)
@@ -186,7 +186,8 @@ class Learner(nn.Module):
         self.meta_optimizer.step()
 
       loss, rewards = self.policy_batch_loss(query_x, query_y)
-      self.trainer.tb_policy_batch(self.tb, rewards, loss, self.num_iter, 0, 1)
+      if self.process_id == 0: 
+        self.trainer.tb_policy_batch(self.tb, rewards, loss, self.num_iter, 0, 1)
 
       # loss, pred = self.model(query_x, query_y)
       all_grads = list(autograd.grad(loss, self.model.parameters()))
