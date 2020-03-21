@@ -42,7 +42,7 @@ def main(args):
   num_validation_repos = 100
   tb = Tensorboard(args.exp_name, unique_name=args.unique_id)
 
-  data_loaders = [iter(DataLoader(MetaGeneratorDataset(categories=['algebra', 'arithmetic', 'numbers', 'comparison']), shuffle=True, k_shot=args.k_shot, num_iteration=args.num_iterations, query_batch_size=args.query_batch_size))]
+  data_loaders = [iter(DataLoader(MetaGeneratorDataset(categories=['algebra', 'arithmetic', 'numbers', 'comparison'], k_shot=args.k_shot, num_iteration=args.num_iterations, query_batch_size=args.query_batch_size), shuffle=True, batch_size=1))]
   validation_data_loaders = [iter(DataLoader(MetaGeneratorDataset(categories=['calculus', 'measurement', 'polynomials', 'probability']), shuffle=True, batch_size=1))]
 
   if torch.cuda.is_available:
