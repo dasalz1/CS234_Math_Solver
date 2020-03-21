@@ -33,7 +33,7 @@ class Learner(nn.Module):
       kn = k.replace('module.', '')
       model_dict[kn] = v
       del model_dict[k]
-    self.model.load_state_dict(model_dict, strict=True)
+    self.model.load_state_dict(model_dict)
     if process_id == 0:
       optim_params = (self.model.parameters(),) + optim_params
       self.optimizer = optimizer(*optim_params)
@@ -154,10 +154,16 @@ class Learner(nn.Module):
 
     policy_losses = (-log_probs * advantages).sum(dim=-1).mean()
     batch_rewards = rewards.sum(dim=-1).mean()
-    non_pad_mask = current_as.ne(PAD)
-    avg_n_char = non_pad_mask.sum().item()/batch_size
+    
+    # non_pad_mask = current_as.ne(PAD)
+    # avg_n_char = non_pad_mask.sum(dim=-1).item()/batch_size
 
-    return policy_losses, batch_rewards, avg_n_char
+    tb_rewards = float(np.sum(rewards.sum(dim=-1).item() / current_as.ne(PAD).sum(dim=-1).item()))
+    print(current_as.ne(PAD).sum(dim=-1).item())
+
+    # sum(tb_rewards)
+
+    return policy_losses, batch_rewards, tb_rewards
 
   def forward(self, num_updates, data_queue, data_event, process_event, tb=None, log_interval=100, checkpoint_interval=10000, free_interval=50):
     data_event.wait()
@@ -198,9 +204,10 @@ class Learner(nn.Module):
           torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
           self.meta_optimizer.step()
 
-        loss, rewards, avg_n_char = self.policy_batch_loss(query_x, query_y)
+        loss, rewards, tb_rewards = self.policy_batch_loss(query_x, query_y)
+        
         if self.process_id == 0: 
-          self.trainer.tb_policy_batch(self.tb, rewards/avg_n_char, loss, self.num_iter, 0, 1)
+          self.trainer.tb_policy_batch(self.tb, tb_rewards, loss/avg_n_char, self.num_iter, 0, 1)
 
         # loss, pred = self.model(query_x, query_y)
         all_grads = autograd.grad(loss, self.model.parameters())
