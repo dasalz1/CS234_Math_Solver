@@ -159,7 +159,7 @@ class Learner(nn.Module):
 
     return policy_losses, batch_rewards, avg_n_char
 
-  def forward(self, num_updates, data_queue, data_event, process_event, tb=None, log_interval=100, checkpoint_interval=10000, free_interval=10):
+  def forward(self, num_updates, data_queue, data_event, process_event, tb=None, log_interval=100, checkpoint_interval=10000, free_interval=50):
     data_event.wait()
     try:
       while(True):
@@ -217,7 +217,7 @@ class Learner(nn.Module):
         self.num_iter += 1
         data_event.wait()
     except KeyboardInterrupt:
-      if self.processes_id == 0: self.save_checkpoint(self.model, self.optimizer, 'final_model')
+      if self.process_id == 0: self.save_checkpoint(self.model, self.optimizer, 'final_model')
 
 
   # def forward(self, x_data, y_data):
