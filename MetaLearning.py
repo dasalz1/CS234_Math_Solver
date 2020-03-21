@@ -171,7 +171,7 @@ class Learner(nn.Module):
           data_event.clear()
 
         if self.process_id == 0 and self.num_iter != 0 and self.num_iter % checkpoint_interval == 0:
-          self.save_checkpoint(model, optimizer, self.num_iter)
+          self.save_checkpoint(self.model, self.optimizer, self.num_iter)
 
         # broadcast weights from master process to all others and save them to a detached dictionary for loadinglater
         for k, v in self.model.state_dict().items():
@@ -212,7 +212,7 @@ class Learner(nn.Module):
 
         data_event.wait()
     except KeyboardInterrupt:
-      self.save_checkpoint(model, optimizer, -1)
+      self.save_checkpoint(self.model, self.optimizer, -1)
 
   # def forward(self, x_data, y_data):
     # pass#self.policy_batch_loss(x_data, y_data)
