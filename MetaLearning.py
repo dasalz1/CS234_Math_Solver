@@ -157,8 +157,6 @@ class Learner(nn.Module):
     non_pad_mask = current_as.ne(PAD)
     avg_n_char = non_pad_mask.sum().item()/batch_size
 
-    print(avg_n_char)
-
     return policy_losses, batch_rewards, avg_n_char
 
   def forward(self, num_updates, data_queue, data_event, process_event, tb=None, log_interval=100, checkpoint_interval=10000, free_interval=10):
