@@ -185,12 +185,12 @@ class Learner(nn.Module):
       support_x, support_y, query_x, query_y = map(lambda x: torch.LongTensor(x).to(self.device), data)
       for i in range(num_updates):
         self.meta_optimizer.zero_grad()
-        loss, _ = self(support_x, support_y)#self.policy_batch_loss(support_x, support_y)
+        loss, _ = self.model(support_x, support_y, reg=False, device=self.device)#self.policy_batch_loss(support_x, support_y)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
         self.meta_optimizer.step()
 
-      loss, rewards = self(query_x, query_y)#self.policy_batch_loss(query_x, query_y)
+      loss, rewards = self.model(query_x, query_y, reg=False, device=self.device)#self(query_x, query_y)#self.policy_batch_loss(query_x, query_y)
       if self.process_id == 0: 
         self.trainer.tb_policy_batch(self.tb, rewards, loss, self.num_iter, 0, 1)
 
@@ -210,7 +210,7 @@ class Learner(nn.Module):
       data_event.wait()
 
   def forward(self, x_data, y_data):
-    self.policy_batch_loss(x_data, y_data)
+    pass#self.policy_batch_loss(x_data, y_data)
 
 
 class MetaTrainer:
