@@ -117,7 +117,7 @@ class Policy_Network(nn.Module):
                 # if the action taken is EOS or if end of sequence trajectory ends
                 complete *= (1 - ((actions==EOS) | (trg_t==EOS)).float())
               
-            returns = self.get_returns(rewards, batch_size, gamma)
+            returns = self.get_returns(rewards, batch_size, gamma, device=device)
 
             # advantages = returns - values
             advantages = returns
