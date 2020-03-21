@@ -252,8 +252,8 @@ class MetaTrainer:
       process_event.wait()
       process_event.clear()
       for task in range(self.world_size):
-        # task_data = data_loader.get_sample()
-        task_data = (np.random.randint(0, 20000, (1, 45)), np.random.randint(0, 20000, (1, 5)), np.random.randint(0, 20000, (10, 45)), np.random.randint(0, 20000, (10, 5)))
+        task_data = data_loader.get_sample()
+        # task_data = (np.random.randint(0, 20000, (1, 45)), np.random.randint(0, 20000, (1, 5)), np.random.randint(0, 20000, (10, 45)), np.random.randint(0, 20000, (10, 5)))
         # place holder for sampling data from dataset
         data_queue.put((task_data[0], task_data[1], 
                 task_data[2], task_data[3]))
