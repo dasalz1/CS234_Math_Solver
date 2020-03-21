@@ -155,11 +155,6 @@ class Learner(nn.Module):
     policy_losses = (-log_probs * advantages).sum(dim=-1).mean()
     batch_rewards = rewards.sum(dim=-1).mean()
 
-    del complete
-    del rewards
-    del log_probs
-    del advantages_mask
-
     return policy_losses, batch_rewards
 
   def process(self, num_updates, data_queue, data_event, process_event, tb=None, log_interval=100, checkpoint_interval=10000):
