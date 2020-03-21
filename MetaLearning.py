@@ -28,7 +28,12 @@ class Learner(nn.Module):
     print(gpu)
     self.model = Policy_Network(data_parallel=False)
     saved_checkpoint = torch.load("./checkpoint.pth")
-    self.model.load_state_dict(saved_checkpoint['model'], strict=True)
+    model_dict = savevd_checkpoint['model']
+    for k, v in model_dict.items():
+      kn = k.replace('module.', '')
+      model_dict[kn] = v
+      del model_dict[k]
+    self.model.load_state_dict(model_dict, strict=True)
     if process_id == 0:
       optim_params = (self.model.parameters(),) + optim_params
       self.optimizer = optimizer(*optim_params)
