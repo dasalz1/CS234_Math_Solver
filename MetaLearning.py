@@ -157,7 +157,7 @@ class Learner(nn.Module):
 
     return policy_losses, batch_rewards
 
-  def process(self, num_updates, data_queue, data_event, process_event, tb=None, log_interval=100, checkpoint_interval=10000):
+  def forward(self, num_updates, data_queue, data_event, process_event, tb=None, log_interval=100, checkpoint_interval=10000):
     data_event.wait()
     while(True):
       data = data_queue.get()
@@ -209,8 +209,8 @@ class Learner(nn.Module):
 
       data_event.wait()
 
-  def forward(self, x_data, y_data):
-    pass#self.policy_batch_loss(x_data, y_data)
+  # def forward(self, x_data, y_data):
+    # pass#self.policy_batch_loss(x_data, y_data)
 
 
 class MetaTrainer:
@@ -226,7 +226,7 @@ class MetaTrainer:
     os.environ['MASTER_ADDR'] = address
     os.environ['MASTER_PORT'] = port
     dist.init_process_group(self.backend, rank=process_id, world_size=self.world_size)
-    self.meta_learners[process_id].process(num_updates, data_queue, data_event, process_event)
+    self.meta_learners[process_id](num_updates, data_queue, data_event, process_event)
 
 
 
