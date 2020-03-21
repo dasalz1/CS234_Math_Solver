@@ -181,9 +181,8 @@ class Learner(nn.Module):
 
         # self.model.to(self.device)
         self.model.train()
-        # if self.num_iter != 0 and self.num_iter % free_interval == 0:
-          # torch.cuda.empty_cache()
-        torch.cuda.empty_cache()
+        if self.num_iter != 0 and self.num_iter % free_interval == 0:
+          torch.cuda.empty_cache()
 
         # meta gradients
         support_x, support_y, query_x, query_y = map(lambda x: torch.LongTensor(x).to(self.device), data)
