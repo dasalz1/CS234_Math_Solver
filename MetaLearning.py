@@ -199,7 +199,7 @@ class Learner(nn.Module):
 
         loss, rewards, tb_rewards = self.policy_batch_loss(query_x, query_y)
         
-        if self.process_id == 0
+        if self.process_id == 0:
           self.trainer.tb_policy_batch(self.tb, tb_rewards, loss, self.num_iter, 0, 1)
 
         # loss, pred = self.model(query_x, query_y)
