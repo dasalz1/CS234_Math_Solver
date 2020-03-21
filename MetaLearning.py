@@ -24,7 +24,7 @@ PAD_IDX = 0
 
 class Learner(nn.Module):
                         # optim.Adam
-  def __init__(self, process_id, gpu='cpu', world_size=4, optimizer=AdamW, optimizer_sparse=optim.SparseAdam, optim_params=(1e-6), model_params=None, tb=None):
+  def __init__(self, process_id, gpu='cpu', world_size=4, optimizer=AdamW, optimizer_sparse=optim.SparseAdam, optim_params=(1e-5,), model_params=None, tb=None):
     super(Learner, self).__init__()
     print(gpu)
     self.model = Policy_Network(data_parallel=False)
