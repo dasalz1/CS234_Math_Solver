@@ -27,6 +27,7 @@ class CurriculumTrainer():
 
     def from_checkpoint_if_exists(self, model, optimizer, scheduler):
         epoch = 0
+        model = optimizer = scheduler = None
         if os.path.isfile("checkpoint.pth"):
             print("Loading existing checkpoint...")
             checkpoint = torch.load("checkpoint.pth")
@@ -38,7 +39,7 @@ class CurriculumTrainer():
                 print("Error occurred loading optimizer state dict...")
             if scheduler and 'scheduler' in checkpoint and self.use_mle:
                 scheduler.load_state_dict(checkpoint['scheduler'])
-            return epoch, model, optimizer, scheduler
+        return epoch, model, optimizer, scheduler
 
     def calculate_reward(self, actions_prediction, actions, ignore_index = 0, sparse_rewards = False):
         if sparse_rewards:
@@ -60,7 +61,7 @@ class CurriculumTrainer():
 
     def compute_mle_loss(self, prediction, target, smoothing):
         def compute_cross_entropy_loss(prediction, target, smoothing):
-            log_probabilities = F
+            log_probabilities = F.log_softmax(prediction, dim=1)
             target = target.contiguous().view(-1)
             if smoothing:
                 eps = 0.1
@@ -158,9 +159,15 @@ class CurriculumTrainer():
 
         # Variables
         total_loss = 0.
-
+        
         current_epoch, model, optimizer, scheduler = self.from_checkpoint_if_exists(student_model, student_optimizer, student_scheduler)
-        model.train()
+        if model is not None:
+            student_model = model
+        if optimizer is not None:
+            student_optimizer = optimizer
+        if scheduler is not None:
+            student_scheduler = scheduler
+        student_model.train()
 
         for epoch in range(current_epoch, num_epochs):
             total_mle_loss = 0.0
@@ -168,7 +175,7 @@ class CurriculumTrainer():
             num_chars_correct = 0.0
             all_rewards = []
 
-            optimizer = AdamW(model.parameters(), lr = learning_rate)
+            optimizer = AdamW(student_model.parameters(), lr = learning_rate)
 
             if self.use_mle or self.use_rl  :
                 scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=4e4, num_training_steps=len(training_data))
@@ -178,7 +185,7 @@ class CurriculumTrainer():
                 student_optimizer.zero_grad()
 
                 if not self.use_mle:
-                    policy_losses, batch_rewards = self.policy_batch_loss(batch_qs, batch_as, model, gamma=0.9)
+                    policy_losses, batch_rewards = self.policy_batch_loss(batch_qs, batch_as, student_model, gamma=0.9)
                 if not self.use_rl:
                     mle_loss, num_correct, num_chars = self.mle_batch_loss(batch_qs, batch_as, student_model.action_transformer)
 

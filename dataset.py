@@ -93,25 +93,25 @@ class NaïveCurriculumDataset(Dataset):
         return ques, anws
         
 class DeepCurriculumDataset(Dataset):
-    def __init__(self, categories, mean_accuracy_by_category, difficulty=0.5, num_iterations = 12, batch_size = 4, model = None):
-        assert(len(self.categories) == len(mean_accuracy_by_category))
+    def __init__(self, categories, mean_accuracy_by_category, model, difficulty=0.5, num_iterations = 12, batch_size = 4):
         self.categories = categories
+        self.model = model
         self.total_iterations = int(num_iterations * batch_size)
         self.current_iteration = 0
+        assert(len(self.categories) == len(mean_accuracy_by_category))
 
-        assert (np.sum(self.category_probabilities) == 1)
         self.category_probabilities = self.model.forward(mean_accuracy_by_category)
         initial_modules = modules.train(_make_entropy_fn(difficulty, 1))
         filtered_modules = _filter_and_flatten(categories, initial_modules)
         self.sampled_modules = list(six.iteritems(filtered_modules))
+        assert (torch.sum(self.category_probabilities) == 1)
 
     def __len__(self):
         return self.total_iterations
 
     def __getitem__(self, idx):
-        # TODO: Following line could have list shaping/access issues? Should review torch.multinomial and sample_from_module functions definitions
-        # Also, can Torch backprop through multinomial stochasticity in the first place?
-        problem = sample_from_module(self.sampled_modules[torch.multinomial(self.category_probabilities, 1)[0]], show_dropped=False)[0]
+        selected_module = self.sampled_modules[torch.multinomial(self.category_probabilities, 1)[0]][1]
+        problem = sample_from_module(selected_module, show_dropped=False)[0]
         # converts to tokens and adds BOS and EOS tokens
         ques, anws = np_encode_string(str(problem[0])), np_encode_string(str(problem[1]))
 
