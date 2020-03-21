@@ -49,8 +49,8 @@ def main(args):
     torch.backends.cudnn.deterministic=True
     torch.backends.cudnn.benchmark = False
 
-  trainer = MetaTrainer(args.meta_batch_size, device=device, num_iterations=args.num_iterations, tb=tb)
-  trainer.train(data_loaders, num_updates=args.num_updates)
+  trainer = MetaTrainer(args.meta_batch_size, device=device, tb=tb)
+  trainer.train(data_loaders, num_updates=args.num_updates, num_iterations=args.num_iterations)
 
 if __name__=='__main__':
   set_start_method('spawn')

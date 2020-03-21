@@ -221,7 +221,7 @@ class MetaTrainer:
 
 
   # dataloaders is list of the iterators of the dataloaders for each task
-  def train(self, data_loaders, num_updates = 5, tb=None, num_iters=250000):
+  def train(self, data_loaders, num_updates=5, tb=None, num_iterations=250000):
     data_queue = Queue()
     # for notifying when to recieve data
     data_event = Event()
