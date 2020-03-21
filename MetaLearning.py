@@ -157,60 +157,64 @@ class Learner(nn.Module):
 
     return policy_losses, batch_rewards
 
-  def forward(self, num_updates, data_queue, data_event, process_event, tb=None, log_interval=100, checkpoint_interval=10000, free_interval=50):
+  def forward(self, num_updates, data_queue, data_event, process_event, tb=None, log_interval=100, checkpoint_interval=10000, free_interval=10):
     data_event.wait()
-    while(True):
-      data = data_queue.get()
+    try:
+      while(True):
+        data = data_queue.get()
 
-      if data is None: break
-      dist.barrier(async_op=True)
+        if data is None: break
+        dist.barrier(async_op=True)
 
-      if self.process_id == 0:
-        original_state_dict = {}
-        data_event.clear()
+        if self.process_id == 0:
+          original_state_dict = {}
+          data_event.clear()
 
-      if self.process_id == 0 and self.num_iter != 0 and self.num_iter % checkpoint_interval == 0:
-        self.save_checkpoint(model, optimizer, self.num_iter)
+        if self.process_id == 0 and self.num_iter != 0 and self.num_iter % checkpoint_interval == 0:
+          self.save_checkpoint(model, optimizer, self.num_iter)
 
-      if num_iter != 0 and self.num_iter % free_interval == 0:
+        # broadcast weights from master process to all others and save them to a detached dictionary for loadinglater
+        for k, v in self.model.state_dict().items():
+          if self.process_id == 0:
+            original_state_dict[k] = v.clone().detach()
+          dist.broadcast(v, src=0, async_op=True)
+
+        # self.model.to(self.device)
+        self.model.train()
+
+        # if self.num_iter != 0 and self.num_iter % free_interval == 0:
+          # torch.cuda.empty_cache()
         torch.cuda.empty_cache()
 
-      # broadcast weights from master process to all others and save them to a detached dictionary for loadinglater
-      for k, v in self.model.state_dict().items():
+        # meta gradients
+        support_x, support_y, query_x, query_y = map(lambda x: torch.LongTensor(x).to(self.device), data)
+        for i in range(num_updates):
+          self.meta_optimizer.zero_grad()
+          loss, _ = self.policy_batch_loss(support_x, support_y)
+          loss.backward()
+          torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+          self.meta_optimizer.step()
+
+        loss, rewards = self.policy_batch_loss(query_x, query_y)
+        if self.process_id == 0: 
+          self.trainer.tb_policy_batch(self.tb, rewards, loss, self.num_iter, 0, 1)
+
+        # loss, pred = self.model(query_x, query_y)
+        all_grads = autograd.grad(loss, self.model.parameters())
+
+        for idx in range(len(all_grads)):
+          dist.reduce(all_grads[idx].data, 0, op=dist.ReduceOp.SUM, async_op=True)
+          all_grads[idx].data = all_grads[idx].data / self.world_size
+
         if self.process_id == 0:
-          original_state_dict[k] = v.clone().detach()
-        dist.broadcast(v, src=0, async_op=True)
+          self.num_iter += 1
+          self._write_grads(original_state_dict, all_grads, (query_x, query_y))
+          # finished batch so can load data again from master
+          process_event.set()
 
-      # self.model.to(self.device)
-      self.model.train()
-
-      # meta gradients
-      support_x, support_y, query_x, query_y = map(lambda x: torch.LongTensor(x).to(self.device), data)
-      for i in range(num_updates):
-        self.meta_optimizer.zero_grad()
-        loss, _ = self.policy_batch_loss(support_x, support_y)
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
-        self.meta_optimizer.step()
-
-      loss, rewards = self.policy_batch_loss(query_x, query_y)
-      if self.process_id == 0: 
-        self.trainer.tb_policy_batch(self.tb, rewards, loss, self.num_iter, 0, 1)
-
-      # loss, pred = self.model(query_x, query_y)
-      all_grads = autograd.grad(loss, self.model.parameters())
-
-      for idx in range(len(all_grads)):
-        dist.reduce(all_grads[idx].data, 0, op=dist.ReduceOp.SUM, async_op=True)
-        all_grads[idx].data = all_grads[idx].data / self.world_size
-
-      if self.process_id == 0:
-        self.num_iter += 1
-        self._write_grads(original_state_dict, all_grads, (query_x, query_y))
-        # finished batch so can load data again from master
-        process_event.set()
-
-      data_event.wait()
+        data_event.wait()
+      except KeyboardInterrupt:
+        self.save_checkpoint(model, optimizer, -1)
 
   # def forward(self, x_data, y_data):
     # pass#self.policy_batch_loss(x_data, y_data)
@@ -251,19 +255,22 @@ class MetaTrainer:
                           tb if process_id == 0 else None)))
       processes[-1].start()
 
-    for num_iter in tqdm(range(num_iterations), mininterval=2, leave=False):
-      process_event.wait()
-      process_event.clear()
-      for task in range(self.world_size):
-        task_data = data_loader.get_sample()
-        # task_data = (np.random.randint(0, 20000, (1, 45)), np.random.randint(0, 20000, (1, 5)), np.random.randint(0, 20000, (10, 45)), np.random.randint(0, 20000, (10, 5)))
-        # place holder for sampling data from dataset
-        data_queue.put((task_data[0], task_data[1], 
-                task_data[2], task_data[3]))
-      data_event.set()
+    try:
+      for num_iter in tqdm(range(num_iterations), mininterval=2, leave=False):
+        process_event.wait()
+        process_event.clear()
+        for task in range(self.world_size):
+          task_data = data_loader.get_sample()
+          # task_data = (np.random.randint(0, 20000, (1, 45)), np.random.randint(0, 20000, (1, 5)), np.random.randint(0, 20000, (10, 45)), np.random.randint(0, 20000, (10, 5)))
+          # place holder for sampling data from dataset
+          data_queue.put((task_data[0], task_data[1], 
+                  task_data[2], task_data[3]))
+        data_event.set()
 
-    for _ in range(self.world_size):
-      data_queue.put(None)
+      for _ in range(self.world_size):
+        data_queue.put(None)
+    except KeyboardInterrupt:
+      pass
 
     for p in processes:
       p.join()
