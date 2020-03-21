@@ -44,7 +44,7 @@ def main(args):
     # User parameters
     data_loader_batch_size = 4
     num_iterations = 1.e5
-    categories = full_categories
+    categories = ['algebra', 'arithmetic', 'probability', 'numbers'] #full_categories
     mean_accuracy_by_category = torch.zeros(len(categories))
     curriculum_step_length = 16
 
@@ -64,9 +64,9 @@ def main(args):
     tb = Tensorboard(args.exp_name, unique_name=args.unique_id)
     mdsmgr = MathDatasetManager(math_dataset_file_path)
 
-    # Get data categories and types from static dataset
+    '''# Get data categories and types from static dataset
     categories = mdsmgr.get_categories()
-    types = mdsmgr.get_types()
+    types = mdsmgr.get_types()'''
 
     # Algorithm-Specific Parameters
     if args.use_mle_only:
@@ -98,8 +98,10 @@ def main(args):
         # Create dataset and dataloader
         # TODO: num_iterations and batch_size okay here? Were hard-coded to 12 and 4 before, not sure why.
         # TODO: Is there a difference between data_loader_batch_size and batch_size?
-        curriculum_dataset = DeepCurriculumDataset(categories, mean_accuracy_by_category, teacher_model, difficulty=0.5,
-                                                   num_iterations=num_iterations, batch_size=batch_size)
+        curriculum_dataset = DeepCurriculumDataset(categories, mean_accuracy_by_category, teacher_model, difficulty = 0.5,
+                                                   num_iterations = num_iterations, batch_size = batch_size,
+                                                   starting_eps = 0.95-curriculum_step * curriculum_step_length / num_iterations,
+                                                   eps_grad = -1/num_iterations)
         #curriculum_dataset = NaïveCurriculumDataset(categories=['algebra', 'arithmetic', 'probability', 'numbers'])
         curriculum_data_loader = DataLoader(curriculum_dataset, batch_size=data_loader_batch_size, shuffle=True,
                                             collate_fn=collate_fn, num_workers=len(CUDA_VISIBLE_DEVICES))

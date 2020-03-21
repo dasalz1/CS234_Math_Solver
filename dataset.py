@@ -93,11 +93,13 @@ class NaïveCurriculumDataset(Dataset):
         return ques, anws
         
 class DeepCurriculumDataset(Dataset):
-    def __init__(self, categories, mean_accuracy_by_category, model, difficulty=0.5, num_iterations = 12, batch_size = 4):
+    def __init__(self, categories, mean_accuracy_by_category, model, difficulty=0.5, num_iterations = 12, batch_size = 4, starting_eps=0, eps_grad=0):
         self.categories = categories
         self.model = model
         self.total_iterations = int(num_iterations * batch_size)
         self.current_iteration = 0
+        self.starting_eps = starting_eps
+        self.eps_grad = eps_grad
         assert(len(self.categories) == len(mean_accuracy_by_category))
 
         self.category_probabilities = self.model.forward(mean_accuracy_by_category)
@@ -110,7 +112,10 @@ class DeepCurriculumDataset(Dataset):
         return self.total_iterations
 
     def __getitem__(self, idx):
-        selected_module = self.sampled_modules[torch.multinomial(self.category_probabilities, 1)[0]][1]
+        if np.random.random() < self.starting_eps + self.current_iteration * self.eps_grad:
+            selected_module = self.sampled_modules[np.random.randint(0, len(self.sampled_modules))][1]
+        else:
+            selected_module = self.sampled_modules[torch.multinomial(self.category_probabilities, 1)[0]][1]
         problem = sample_from_module(selected_module, show_dropped=False)[0]
         # converts to tokens and adds BOS and EOS tokens
         ques, anws = np_encode_string(str(problem[0])), np_encode_string(str(problem[1]))
