@@ -162,9 +162,11 @@ class Learner(nn.Module):
     print(temp1.shape)
     temp2 = current_as.ne(PAD).sum(dim=-1)
     print(temp2.shape)
-    temp3 = torch.div(temp1/temp2)
+    temp3 = torch.div(temp1, temp2)
     print(temp3.shape)
-    tb_rewards = float(np.sum(rewards.sum(dim=-1).item() / current_as.ne(PAD).sum(dim=-1).item()))
+    # tb_rewards = float(np.sum(rewards.sum(dim=-1).item() / current_as.ne(PAD).sum(dim=-1).item()))
+    temp4 = temp3.mean().item()
+    print(temp4)
     # print(current_as.ne(PAD).sum(dim=-1).item())
 
     # sum(tb_rewards)
