@@ -231,7 +231,7 @@ class MetaTrainer:
     os.environ['MASTER_ADDR'] = address
     os.environ['MASTER_PORT'] = port
     dist.init_process_group(self.backend, rank=process_id, world_size=self.world_size)
-    self.meta_learners[process_id](num_updates, data_queue, data_event, process_event)
+    self.meta_learners[process_id].process(num_updates, data_queue, data_event, process_event)
 
 
 
