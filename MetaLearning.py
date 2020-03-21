@@ -245,8 +245,6 @@ class MetaTrainer:
       process_event.clear()
       for task in range(self.world_size):
         task_data = data_loader.get_sample()
-
-        print(task_data[0])
         # place holder for sampling data from dataset
         data_queue.put((task_data[0], task_data[1], 
                 task_data[2], task_data[3]))
