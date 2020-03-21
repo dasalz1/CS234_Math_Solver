@@ -85,6 +85,9 @@ class MetaGeneratorDataset(Dataset):
         
         return support_ques, support_ans, query_ques, query_ans
 
+    def get_sample(self):
+        return self.__getitem__(0)
+
 class NaïveCurriculumDataset(Dataset):
 
     def __init__(self, categories=["algebra", "probability"], num_iterations=12, batch_size=4):

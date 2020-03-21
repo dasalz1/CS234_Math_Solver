@@ -223,7 +223,7 @@ class MetaTrainer:
 
 
   # dataloaders is list of the iterators of the dataloaders for each task
-  def train(self, data_loaders, num_updates=5, tb=None, num_iterations=250000):
+  def train(self, data_loader, num_updates=5, tb=None, num_iterations=250000):
     data_queue = Queue()
     # for notifying when to recieve data
     data_event = Event()
@@ -231,7 +231,6 @@ class MetaTrainer:
     process_event = Event()
     # so doesn't hang on first iteration
     process_event.set()
-    num_tasks = len(data_loaders)
     
     processes = []
     for process_id in range(self.world_size):
@@ -244,9 +243,8 @@ class MetaTrainer:
     for num_iter in tqdm(range(num_iterations), mininterval=2, leave=False):
       process_event.wait()
       process_event.clear()
-      tasks = np.random.randint(0, num_tasks, (self.world_size))
-      for task in tasks:
-        task_data = next(data_loaders[task])
+      for task in range(self.world_size):
+        task_data = data_loader.get_sample()
         # place holder for sampling data from dataset
         data_queue.put((task_data[0].numpy()[0], task_data[1].numpy()[0], 
                 task_data[2].numpy()[0], task_data[3].numpy()[0]))
