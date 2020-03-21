@@ -9,13 +9,6 @@ from dataset import MetaGeneratorDataset
 from datetime import date
 from parameters import VOCAB_SIZE, MAX_QUESTION_SIZE
 
-
-subcategories = {'algebra': algebra_subcategories, 'arithmetic': arithmetic_subcategories, 
-        'calculus': calculus_subcategories, 'comparison': comparison_subcategories, 
-        'measurement': measurement_categories,
-        'numbers': numbers_categories, 'polynomials': polynomials_categories, 
-        'probability': probability_categories}
-
 from torch.multiprocessing import set_start_method
 
 parser = argparse.ArgumentParser()
