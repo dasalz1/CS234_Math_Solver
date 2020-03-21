@@ -18,12 +18,13 @@ from parameters import VOCAB_SIZE, MAX_ANSWER_SIZE, MAX_QUESTION_SIZE
 from dataset import PAD, EOS
 from training import Trainer
 from tqdm import tqdm
+from transformers import AdamW
 
 PAD_IDX = 0
 
 class Learner(nn.Module):
-
-  def __init__(self, process_id, gpu='cpu', world_size=4, optimizer=optim.Adam, optimizer_sparse=optim.SparseAdam, optim_params=(1e-5, (0.9, 0.995), 1e-8), model_params=None, tb=None):
+                        # optim.Adam
+  def __init__(self, process_id, gpu='cpu', world_size=4, optimizer=AdamW, optimizer_sparse=optim.SparseAdam, optim_params=(1e-6), model_params=None, tb=None):
     super(Learner, self).__init__()
     print(gpu)
     self.model = Policy_Network(data_parallel=False)
