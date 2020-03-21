@@ -73,6 +73,8 @@ class Learner(nn.Module):
     self.model.to(self.device)
     self.model.train()
 
+    torch.cuda.empty_cache()
+
     self.optimizer.zero_grad()
     dummy_query_x, dummy_query_y = temp_data
     action_probs = self.model(src_seq=dummy_query_x, trg_seq=dummy_query_y)
@@ -178,7 +180,7 @@ class Learner(nn.Module):
           original_state_dict[k] = v.clone().detach()
         dist.broadcast(v, src=0, async_op=True)
 
-      self.model.to(self.device)
+      # self.model.to(self.device)
       self.model.train()
 
       # meta gradients
