@@ -24,7 +24,7 @@ PAD_IDX = 0
 
 class Learner(nn.Module):
                         # optim.Adam
-  def __init__(self, process_id, gpu='cpu', world_size=4, optimizer=AdamW, optimizer_sparse=optim.SparseAdam, optim_params=(1e-5,), model_params=None, tb=None):
+  def __init__(self, process_id, gpu='cpu', world_size=4, optimizer=AdamW, optimizer_sparse=optim.SparseAdam, optim_params=(1e-6,), model_params=None, tb=None):
     super(Learner, self).__init__()
     print(gpu)
     self.model = Policy_Network(data_parallel=False)
@@ -39,7 +39,7 @@ class Learner(nn.Module):
       optim_params = (self.model.parameters(),) + optim_params
       self.optimizer = optimizer(*optim_params)
     
-    self.meta_optimizer = optim.SGD(self.model.parameters(), 1e-3)
+    self.meta_optimizer = optim.SGD(self.model.parameters(), 1e-5)
     self.process_id = process_id
     self.device='cuda:'+str(process_id) if gpu is not 'cpu' else gpu
     self.model.to(self.device)
@@ -71,7 +71,7 @@ class Learner(nn.Module):
   def _write_grads(self, original_state_dict, all_grads, temp_data):
     # reload original model before taking meta-gradients
     self.model.load_state_dict(original_state_dict)
-    # self.model.to(self.device)
+    self.model.to(self.device)
     self.model.train()
 
     self.optimizer.zero_grad()
@@ -159,7 +159,7 @@ class Learner(nn.Module):
 
     return policy_losses, batch_rewards, tb_rewards
 
-  def forward(self, num_updates, data_queue, data_event, process_event, tb=None, log_interval=100, checkpoint_interval=10000, free_interval=25):
+  def forward(self, num_updates, data_queue, data_event, process_event, tb=None, log_interval=100, checkpoint_interval=10000):
     data_event.wait()
     try:
       while(True):
@@ -185,9 +185,7 @@ class Learner(nn.Module):
 
         # self.model.to(self.device)
         self.model.train()
-
-        if self.num_iter != 0 and self.num_iter % free_interval == 0:
-          torch.cuda.empty_cache()
+        torch.cuda.empty_cache()
 
         # meta gradients
         support_x, support_y, query_x, query_y = map(lambda x: torch.LongTensor(x).to(self.device), data)

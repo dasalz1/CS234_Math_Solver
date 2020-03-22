@@ -11,7 +11,7 @@ import collections
 import numpy as np
 from transformer.Beam import Beam
 from utils import get_subsequent_mask, get_pad_mask, np_encode_string, np_decode_string, question_to_batch_collate_fn, question_answer_to_batch_collate_fn
-from dataset import PAD, np_encode_string, np_decode_string
+from dataset import PAD
 from parameters import MAX_QUESTION_SIZE, MAX_ANSWER_SIZE, VOCAB_SIZE
 
 worst_k = collections.deque(maxlen=10)
@@ -179,7 +179,7 @@ class Generator(object):
             def predict_word(dec_seq, src_seq, enc_output, n_active_inst, n_bm):
                 src_mask = get_pad_mask(src_seq, PAD)
                 dec_mask = get_pad_mask(dec_seq, PAD) & get_subsequent_mask(dec_seq)
-                dec_output, *_ = self.model.decoder(dec_seq, dec_mask, enc_output, src_mask)
+                dec_output, *_ = self.model.action_transformer.decoder(dec_seq, dec_mask, enc_output, src_mask)
                                                     
                 dec_output = dec_output[:, -1, :]  # Pick the last step: (bh * bm) * d_h
                 word_prob = F.log_softmax(self.model.trg_word_prj(dec_output), dim=1)

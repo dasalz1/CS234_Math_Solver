@@ -8,3 +8,6 @@ mathematics_dataset-v1.0/
 __pycache__/
 runs/
 *.whl
+Untitled.ipynb
+*.ipynb
+checkpoint.pth
