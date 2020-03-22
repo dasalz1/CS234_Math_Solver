@@ -24,7 +24,7 @@ PAD_IDX = 0
 
 class Learner(nn.Module):
                         # optim.Adam
-  def __init__(self, process_id, gpu='cpu', world_size=4, optimizer=AdamW, optimizer_sparse=optim.SparseAdam, optim_params=(1e-7,), model_params=None, tb=None):
+  def __init__(self, process_id, gpu='cpu', world_size=4, optimizer=AdamW, optimizer_sparse=optim.SparseAdam, optim_params=(1e-6,), model_params=None, tb=None):
     super(Learner, self).__init__()
     print(gpu)
     self.model = Policy_Network(data_parallel=False)
@@ -39,7 +39,7 @@ class Learner(nn.Module):
       optim_params = (self.model.parameters(),) + optim_params
       self.optimizer = optimizer(*optim_params)
     
-    self.meta_optimizer = optim.SGD(self.model.parameters(), 1e-5)
+    self.meta_optimizer = optim.SGD(self.model.parameters(), 1e-4)
     self.process_id = process_id
     self.device='cuda:'+str(process_id) if gpu is not 'cpu' else gpu
     self.model.to(self.device)
@@ -161,6 +161,36 @@ class Learner(nn.Module):
 
     return policy_losses, batch_rewards, tb_rewards
 
+  def forward_singleton(self, num_updates, data, tb=None, checkpoint_interval=10000):
+    
+    original_state_dict = {}
+
+    if self.num_iter != 0 and self.num_iter % checkpoint_interval == 0:
+      self.save_checkpoint(self.model, self.optimizer, self.num_iter)
+
+    for k, v in self.model.state_dict().items():
+      original_state_dict[k] = v.clone().detach()
+
+    self.model.to(self.device)
+    self.model.train()
+    if self.device != 'cpu': torch.cuda.empty_cache()
+
+    support_x, support_y, query_x, query_y = map(lambda x: torch.LongTensor(x).to(self.device), data)
+    for i in range(num_updates):
+      self.meta_optimizer.zero_grad()
+      loss, _, _ = self.policy_batch_loss(support_x, support_y)
+      loss.backward()
+      torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+      self.meta_optimizer.step()
+
+    loss, rewards, tb_rewards = self.policy_batch_loss(query_x, query_y)
+    
+    self.trainer.tb_policy_batch(self.tb, tb_rewards, loss, self.num_iter, 0, 1)
+
+    all_grads = autograd.grad(loss, self.model.parameters())
+    self._write_grads(original_state_dict, all_grads, (query_x, query_y))
+    self.num_iter += 1
+
   def forward(self, num_updates, data_queue, data_event, process_event, tb=None, log_interval=100, checkpoint_interval=10000):
     data_event.wait()
     try:
@@ -223,7 +253,6 @@ class Learner(nn.Module):
 
   # def forward(self, x_data, y_data):
     # pass#self.policy_batch_loss(x_data, y_data)
-
 
 class MetaTrainer:
 
