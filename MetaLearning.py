@@ -136,7 +136,7 @@ class Learner(nn.Module):
 
       # curr_log_probs = -F.cross_entropy(action_probs, trg_t.contiguous().view(-1), ignore_index=0, reduction='none').contiguous().view(-1, 1)
 
-      curr_log_probs = -m.log_prob(actions).contiguous().view(-1, 1)
+      curr_log_probs = -m.log_prob(actions.contiguous().view(-1)).contiguous().view(-1, 1)
       print(actions.shape)
       print(curr_log_probs.shape)
       # calculate reward based on character cross entropy
@@ -233,7 +233,7 @@ class MetaTrainer:
 
     self.meta_learners = [Learner(process_id=process_id, gpu=process_id if device is not 'cpu' else 'cpu', world_size=world_size, model_params=model_params, tb=tb) for process_id in range(world_size)]
     # gpu backend instead of gloo
-    self.backend = "gloo"#"nccl"
+    self.backend = "nccl"
     
   def init_process(self, process_id, data_queue, data_event, process_event, num_updates, tb=None, address='localhost', port='29500'):
     os.environ['MASTER_ADDR'] = address
