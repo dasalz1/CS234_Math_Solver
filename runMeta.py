@@ -51,7 +51,7 @@ def main(args):
 
   
   if args.world_size == 1:
-    trainer = MetaTrainerSingleton(args.world_size, device=device, tb=tb)
+    trainer = MetaTrainerSingleton(device=device, tb=tb)
   else:
     trainer = MetaTrainer(args.world_size, device=device, tb=tb)
   trainer.train(data_loader, num_updates=args.num_updates, num_iterations=args.num_iterations)
