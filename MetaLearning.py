@@ -24,7 +24,7 @@ PAD_IDX = 0
 
 class Learner(nn.Module):
                         # optim.Adam
-  def __init__(self, process_id, gpu='cpu', world_size=4, optimizer=AdamW, optimizer_sparse=optim.SparseAdam, optim_params=(1e-6,), model_params=None, tb=None):
+  def __init__(self, process_id, gpu='cpu', world_size=4, optimizer=AdamW, optimizer_sparse=optim.SparseAdam, optim_params=(1e-7,), model_params=None, tb=None):
     super(Learner, self).__init__()
     print(gpu)
     self.model = Policy_Network(data_parallel=False)
@@ -39,7 +39,7 @@ class Learner(nn.Module):
       optim_params = (self.model.parameters(),) + optim_params
       self.optimizer = optimizer(*optim_params)
     
-    self.meta_optimizer = optim.SGD(self.model.parameters(), 1e-4)
+    self.meta_optimizer = optim.SGD(self.model.parameters(), 1e-5)
     self.process_id = process_id
     self.device='cuda:'+str(process_id) if gpu is not 'cpu' else gpu
     self.model.to(self.device)
@@ -155,7 +155,7 @@ class Learner(nn.Module):
     advantages = returns
     advantages *= advantages_mask
 
-    policy_losses = (-log_probs * advantages).sum(dim=-1).mean()
+    policy_losses = (-log_probs * advantages).mean(dim=-1).mean()
     batch_rewards = rewards.sum(dim=-1).mean()
     tb_rewards = torch.div(rewards.sum(dim=-1), current_as.ne(PAD).sum(dim=-1)).mean().item()
 
