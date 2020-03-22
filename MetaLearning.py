@@ -137,7 +137,8 @@ class Learner(nn.Module):
       # curr_log_probs = -F.cross_entropy(action_probs, trg_t.contiguous().view(-1), ignore_index=0, reduction='none').contiguous().view(-1, 1)
 
       curr_log_probs = -m.log_prob(actions).contiguous().view(-1, 1)
-
+      print(actions.shape)
+      print(curr_log_probs.shape)
       # calculate reward based on character cross entropy
       curr_rewards = self.calc_reward(actions, trg_t)
 
