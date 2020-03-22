@@ -21,7 +21,7 @@ parser.add_argument("--value_dimension", default=64, type=int)
 parser.add_argument("--dropout", default=0.1, type=float)
 parser.add_argument("--d_word_vec", default=512, type=int)
 parser.add_argument("--inner_dimension", default=2048, type=int)
-parser.add_argument("--meta_batch_size", default=4, type=int)
+parser.add_argument("--world_size", default=4, type=int)
 parser.add_argument("--epochs", default=10, type=int)
 parser.add_argument("--num_updates", default=10, type=int)
 parser.add_argument("--k_shot", default=1, type=int)
@@ -49,7 +49,11 @@ def main(args):
     torch.backends.cudnn.deterministic=True
     torch.backends.cudnn.benchmark = False
 
-  trainer = MetaTrainer(args.meta_batch_size, device=device, tb=tb)
+  
+  if args.world_size == 1:
+    trainer = MetaTrainerSingleton(args.world_size, device=device, tb=tb)
+  else:
+    trainer = MetaTrainer(args.world_size, device=device, tb=tb)
   trainer.train(data_loader, num_updates=args.num_updates, num_iterations=args.num_iterations)
 
 if __name__=='__main__':

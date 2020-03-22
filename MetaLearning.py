@@ -254,6 +254,18 @@ class Learner(nn.Module):
   # def forward(self, x_data, y_data):
     # pass#self.policy_batch_loss(x_data, y_data)
 
+
+class MetaTrainerSingleton:
+
+  def __init__(self, device='cpu', model_params=None, tb=None):
+    self.meta_learner = Learner(process_id=0, gpu=0 if device is not 'cpu' else 'cpu', world_size=1, model_params=model_params, tb=tb)
+    self.device=device
+
+  def train(self, data_loader, num_updates=5, tb=None, num_iterations=250000):
+    for num_iter in tqdm(range(num_iterations), mininterval=2, leave=False):
+      curr_data = data_loader.get_sample()
+      self.meta_learner.forward_singleton(num_updates, data, tb)
+
 class MetaTrainer:
 
   def __init__(self, world_size, device='cpu', model_params=None, tb=None):
@@ -268,7 +280,6 @@ class MetaTrainer:
     os.environ['MASTER_PORT'] = port
     dist.init_process_group(self.backend, rank=process_id, world_size=self.world_size)
     self.meta_learners[process_id](num_updates, data_queue, data_event, process_event)
-
 
 
   # dataloaders is list of the iterators of the dataloaders for each task
