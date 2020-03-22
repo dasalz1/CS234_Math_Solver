@@ -28,7 +28,7 @@ class Learner(nn.Module):
     super(Learner, self).__init__()
     print(gpu)
     self.model = Policy_Network(data_parallel=False)
-    saved_checkpoint = torch.load("./checkpoint.pth")
+    saved_checkpoint = torch.load("./checkpoint-mle.pth")
     model_dict = saved_checkpoint['model']
     for k, v in list(model_dict.items()):
       kn = k.replace('module.', '')
@@ -134,11 +134,13 @@ class Learner(nn.Module):
       # update decoder output
       current_as = torch.cat((current_as, actions), dim=1)
 
-      curr_log_probs = -F.cross_entropy(action_probs, trg_t.contiguous().view(-1), ignore_index=0, reduction='none').contiguous().view(-1, 1)
+      # curr_log_probs = -F.cross_entropy(action_probs, trg_t.contiguous().view(-1), ignore_index=0, reduction='none').contiguous().view(-1, 1)
+
+      curr_log_probs = -m.log_prob(actions)
 
       # calculate reward based on character cross entropy
       curr_rewards = self.calc_reward(actions, trg_t)
-
+      
       # update terms
       rewards = torch.cat((rewards, curr_rewards), dim=1).to(self.device)
       # values = torch.cat((values, curr_values), dim=1).to(self.device)
