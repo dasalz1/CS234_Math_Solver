@@ -81,7 +81,7 @@ class Learner(nn.Module):
     actions = m.sample().contiguous().view(-1, 1)
     trg_t = dummy_query_y[:, :1]
     # dummy_loss = -F.cross_entropy(action_probs, trg_t.contiguous().view(-1), ignore_index=0, reduction='none').sum()
-    dummy_loss = -m.log_prob(actions.contiguous().view(-1)).contiguous().view(-1, 1)
+    dummy_loss = -m.log_prob(actions.contiguous().view(-1)).contiguous().view(-1, 1).sum()
     hooks = self._hook_grads(all_grads)
 
     dummy_loss.backward()
