@@ -24,7 +24,7 @@ PAD_IDX = 0
 
 class Learner(nn.Module):
                         # optim.Adam
-  def __init__(self, process_id, gpu='cpu', world_size=4, optimizer=AdamW, optimizer_sparse=optim.SparseAdam, optim_params=(1e-6,), model_params=None, tb=None):
+  def __init__(self, process_id, gpu='cpu', world_size=4, optimizer=AdamW, optimizer_sparse=optim.SparseAdam, optim_params=(1e-7,), model_params=None, tb=None):
     super(Learner, self).__init__()
     print(gpu)
     self.model = Policy_Network(data_parallel=False)
@@ -71,9 +71,9 @@ class Learner(nn.Module):
   def _write_grads(self, original_state_dict, all_grads, temp_data):
     # reload original model before taking meta-gradients
     self.model.load_state_dict(original_state_dict)
-    self.model.to(self.device)
+    # self.model.to(self.device)
     self.model.train()
-    torch.cuda.empty_cache()
+    # torch.cuda.empty_cache()
     self.optimizer.zero_grad()
     dummy_query_x, dummy_query_y = temp_data
     action_probs = self.model(src_seq=dummy_query_x, trg_seq=dummy_query_y)
@@ -183,7 +183,7 @@ class Learner(nn.Module):
             original_state_dict[k] = v.clone().detach()
           dist.broadcast(v, src=0, async_op=True)
 
-        self.model.to(self.device)
+        # self.model.to(self.device)
         self.model.train()
         torch.cuda.empty_cache()
 
