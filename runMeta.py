@@ -1,5 +1,5 @@
 from tensorboard_utils import Tensorboard
-from MetaLearning import MetaTrainer
+from MetaLearning import MetaTrainer, MetaTrainerSingleton
 import argparse, random
 import numpy as np
 import torch
