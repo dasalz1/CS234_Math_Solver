@@ -24,9 +24,8 @@ PAD_IDX = 0
 
 class Learner(nn.Module):
                         # optim.Adam
-  def __init__(self, process_id, gpu='cpu', world_size=4, optimizer=AdamW, optimizer_sparse=optim.SparseAdam, optim_params=(1e-6,), model_params=None, tb=None):
+  def __init__(self, process_id, gpu='cpu', world_size=4, optimizer=AdamW, optimizer_sparse=optim.SparseAdam, optim_params=(1e-7,), model_params=None, tb=None):
     super(Learner, self).__init__()
-    print(gpu)
     self.model = Policy_Network(data_parallel=False)
     saved_checkpoint = torch.load("./checkpoint-mle.pth")
     model_dict = saved_checkpoint['model']
@@ -39,7 +38,7 @@ class Learner(nn.Module):
       optim_params = (self.model.parameters(),) + optim_params
       self.optimizer = optimizer(*optim_params)
     
-    self.meta_optimizer = optim.SGD(self.model.parameters(), 1e-4)
+    self.meta_optimizer = optim.SGD(self.model.parameters(), 1e-5)
     self.process_id = process_id
     self.device='cuda:'+str(process_id) if gpu is not 'cpu' else gpu
     self.model.to(self.device)
@@ -73,20 +72,17 @@ class Learner(nn.Module):
     self.model.load_state_dict(original_state_dict)
     self.model.to(self.device)
     self.model.train()
-    if self.device != 'cpu': torch.cuda.empty_cache()
     self.optimizer.zero_grad()
     dummy_query_x, dummy_query_y = temp_data
     action_probs = self.model(src_seq=dummy_query_x, trg_seq=dummy_query_y)
     m = Categorical(F.softmax(action_probs, dim=-1))
     actions = m.sample().contiguous().view(-1, 1)
-    trg_t = dummy_query_y[:, :1]
     # dummy_loss = -F.cross_entropy(action_probs, trg_t.contiguous().view(-1), ignore_index=0, reduction='none').sum()
     dummy_loss = -m.log_prob(actions.contiguous().view(-1)).contiguous().view(-1, 1).sum()
     hooks = self._hook_grads(all_grads)
 
     dummy_loss.backward()
     torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
-    print(" ")
     self.optimizer.step()
 
     # gpu memory explodes if you dont remove hooks
@@ -161,7 +157,7 @@ class Learner(nn.Module):
 
     return policy_losses, batch_rewards, tb_rewards
 
-  def forward_singleton(self, num_updates, data, tb=None, checkpoint_interval=10000):
+  def forward_singleton(self, num_updates, data, tb=None, checkpoint_interval=5000, free_interval=25):
     
     original_state_dict = {}
 
@@ -173,7 +169,8 @@ class Learner(nn.Module):
 
     self.model.to(self.device)
     self.model.train()
-    if self.device != 'cpu': torch.cuda.empty_cache()
+    if self.device != 'cpu' and self.num_iter != 0 and self.num_iter % free_interval == 0: 
+      torch.cuda.empty_cache()
 
     support_x, support_y, query_x, query_y = map(lambda x: torch.LongTensor(x).to(self.device), data)
     for i in range(num_updates):
@@ -191,7 +188,7 @@ class Learner(nn.Module):
     self._write_grads(original_state_dict, all_grads, (query_x, query_y))
     self.num_iter += 1
 
-  def forward(self, num_updates, data_queue, data_event, process_event, tb=None, log_interval=100, checkpoint_interval=10000):
+  def forward(self, num_updates, data_queue, data_event, process_event, tb=None, log_interval=100, checkpoint_interval=5000):
     data_event.wait()
     try:
       while(True):
@@ -264,7 +261,7 @@ class MetaTrainerSingleton:
   def train(self, data_loader, num_updates=5, tb=None, num_iterations=250000):
     for num_iter in tqdm(range(num_iterations), mininterval=2, leave=False):
       curr_data = data_loader.get_sample()
-      self.meta_learner.forward_singleton(num_updates, data, tb)
+      self.meta_learner.forward_singleton(num_updates, curr_data, tb)
 
 class MetaTrainer:
 
