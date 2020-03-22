@@ -73,6 +73,9 @@ class MetaGeneratorDataset(Dataset):
         for p_t in problem_threads:
             p_t.join()
 
+        if len(query_data) < self.query_batch_size or len(supp_data) < self.k_shot:
+            return self.__getitem__(0)
+            
         query_ques, query_ans = zip(*query_data)
 
         query_ques = pd.DataFrame(query_ques).fillna(PAD).values.reshape(self.query_batch_size, -1)
