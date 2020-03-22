@@ -52,39 +52,42 @@ class MetaGeneratorDataset(Dataset):
         problem_data.append(support_problem)
 
     def __getitem__(self, idx):
-        query_data = []
-        supp_data = []
-        problem_threads = []
-        sample_module = self.sampled_modules[np.random.randint(0, len(self.sampled_modules))][1]
+        try:
+            query_data = []
+            supp_data = []
+            problem_threads = []
+            sample_module = self.sampled_modules[np.random.randint(0, len(self.sampled_modules))][1]
 
-        for _ in range(self.query_batch_size):
-            problem_threads.append(Thread(target=self.supportProblem, args=(sample_module, query_data,)))
-            problem_threads[-1].start()
+            for _ in range(self.query_batch_size):
+                problem_threads.append(Thread(target=self.supportProblem, args=(sample_module, query_data,)))
+                problem_threads[-1].start()
 
-        for _ in range(self.k_shot):
-            problem_threads.append(Thread(target=self.supportProblem, args=(sample_module, supp_data,)))
-            problem_threads[-1].start()
-        
-        # problem = sample_from_module(sample_module, show_dropped=False)[0]
-
-        # support_ques = torch.LongTensor(pd.DataFrame(np_encode_string(str(problem[0]))).fillna(PAD).values.reshape(1, -1))
-        # support_ans = torch.LongTensor(pd.DataFrame(np_encode_string(str(problem[1]))).fillna(PAD).values.reshape(1, -1))
-        
-        for p_t in problem_threads:
-            p_t.join()
-
-        if len(query_data) < self.query_batch_size or len(supp_data) < self.k_shot:
-            return self.__getitem__(0)
+            for _ in range(self.k_shot):
+                problem_threads.append(Thread(target=self.supportProblem, args=(sample_module, supp_data,)))
+                problem_threads[-1].start()
             
-        query_ques, query_ans = zip(*query_data)
+            # problem = sample_from_module(sample_module, show_dropped=False)[0]
 
-        query_ques = pd.DataFrame(query_ques).fillna(PAD).values.reshape(self.query_batch_size, -1)
-        query_ans = pd.DataFrame(query_ans).fillna(PAD).values.reshape(self.query_batch_size, -1)
+            # support_ques = torch.LongTensor(pd.DataFrame(np_encode_string(str(problem[0]))).fillna(PAD).values.reshape(1, -1))
+            # support_ans = torch.LongTensor(pd.DataFrame(np_encode_string(str(problem[1]))).fillna(PAD).values.reshape(1, -1))
+            
+            for p_t in problem_threads:
+                p_t.join()
 
-        support_ques, support_ans = zip(*supp_data)
+            if len(query_data) < self.query_batch_size or len(supp_data) < self.k_shot:
+                return self.__getitem__(0)
 
-        support_ques = pd.DataFrame(support_ques).fillna(PAD).values.reshape(self.k_shot, -1)
-        support_ans = pd.DataFrame(support_ans).fillna(PAD).values.reshape(self.k_shot, -1)
+            query_ques, query_ans = zip(*query_data)
+
+            query_ques = pd.DataFrame(query_ques).fillna(PAD).values.reshape(self.query_batch_size, -1)
+            query_ans = pd.DataFrame(query_ans).fillna(PAD).values.reshape(self.query_batch_size, -1)
+
+            support_ques, support_ans = zip(*supp_data)
+
+            support_ques = pd.DataFrame(support_ques).fillna(PAD).values.reshape(self.k_shot, -1)
+            support_ans = pd.DataFrame(support_ans).fillna(PAD).values.reshape(self.k_shot, -1)
+        except:
+            return self.__getitem__(0)
         
         return support_ques, support_ans, query_ques, query_ans
 
