@@ -71,7 +71,7 @@ class Learner(nn.Module):
   def _write_grads(self, original_state_dict, all_grads, temp_data):
     # reload original model before taking meta-gradients
     self.model.load_state_dict(original_state_dict)
-    self.model.to(self.device)
+    # self.model.to(self.device)
     self.model.train()
 
     self.optimizer.zero_grad()
