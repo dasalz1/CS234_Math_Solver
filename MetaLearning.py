@@ -86,7 +86,7 @@ class Learner(nn.Module):
 
     dummy_loss.backward()
     torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
-    
+    print(" ")
     self.optimizer.step()
 
     # gpu memory explodes if you dont remove hooks
