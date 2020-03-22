@@ -73,7 +73,7 @@ class Learner(nn.Module):
     self.model.load_state_dict(original_state_dict)
     self.model.to(self.device)
     self.model.train()
-    torch.cuda.empty_cache()
+    if self.device != 'cpu': torch.cuda.empty_cache()
     self.optimizer.zero_grad()
     dummy_query_x, dummy_query_y = temp_data
     action_probs = self.model(src_seq=dummy_query_x, trg_seq=dummy_query_y)

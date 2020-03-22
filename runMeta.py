@@ -57,5 +57,5 @@ def main(args):
   trainer.train(data_loader, num_updates=args.num_updates, num_iterations=args.num_iterations)
 
 if __name__=='__main__':
-  set_start_method('spawn')
+  if args.world_size > 1: set_start_method('spawn')
   main(args)
