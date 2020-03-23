@@ -26,14 +26,15 @@ class Learner(nn.Module):
                         # optim.Adam
   def __init__(self, process_id, gpu='cpu', world_size=4, optimizer=AdamW, optimizer_sparse=optim.SparseAdam, optim_params=(1e-7,), model_params=None, tb=None):
     super(Learner, self).__init__()
-    self.model = Policy_Network(data_parallel=False)
-    saved_checkpoint = torch.load("./checkpoint-mle.pth")
-    model_dict = saved_checkpoint['model']
-    for k, v in list(model_dict.items()):
-      kn = k.replace('module.', '')
-      model_dict[kn] = v
-      del model_dict[k]
-    self.model.load_state_dict(model_dict)
+    print(gpu)
+    self.model = Policy_Network(data_parallel=False, use_gpu=False if gpu is 'cpu' else True)
+    # saved_checkpoint = torch.load("./checkpoint-mle.pth")
+    # model_dict = saved_checkpoint['model']
+    # for k, v in list(model_dict.items()):
+    #   kn = k.replace('module.', '')
+    #   model_dict[kn] = v
+    #   del model_dict[k]
+    # self.model.load_state_dict(model_dict)
     if process_id == 0:
       optim_params = (self.model.parameters(),) + optim_params
       self.optimizer = optimizer(*optim_params)
@@ -74,11 +75,11 @@ class Learner(nn.Module):
     self.model.train()
     self.optimizer.zero_grad()
     dummy_query_x, dummy_query_y = temp_data
-    action_probs = self.model(src_seq=dummy_query_x, trg_seq=dummy_query_y)
+    action_probs, values = self.model(src_seq=dummy_query_x, trg_seq=dummy_query_y, use_critic=True)
     m = Categorical(F.softmax(action_probs, dim=-1))
     actions = m.sample().contiguous().view(-1, 1)
     # dummy_loss = -F.cross_entropy(action_probs, trg_t.contiguous().view(-1), ignore_index=0, reduction='none').sum()
-    dummy_loss = -m.log_prob(actions.contiguous().view(-1)).contiguous().view(-1, 1).sum()
+    dummy_loss = -m.log_prob(actions.contiguous().view(-1)).contiguous().view(-1, 1).sum() + F.mse_loss(values, torch.zeros_like(values), reduction='mean')
     hooks = self._hook_grads(all_grads)
 
     dummy_loss.backward()
@@ -116,13 +117,13 @@ class Learner(nn.Module):
     current_as = batch_as[:, :1]
     complete = torch.ones((batch_size, 1)).to(self.device)
     rewards = torch.zeros((batch_size, 0)).to(self.device)
-    # values = torch.zeros((batch_size, 0)).to(self.device)
+    values = torch.zeros((batch_size, 0)).to(self.device)
     log_probs = torch.zeros((batch_size, 0)).to(self.device)
     advantages_mask = torch.ones((batch_size, 0)).to(self.device)
     for t in range(1, max_len_sequence):
       advantages_mask = torch.cat((advantages_mask, complete), dim=1)
       # action_probs, curr_values = model(src_seq=batch_qs, trg_seq=current_as)
-      action_probs = self.model(src_seq=batch_qs, trg_seq=current_as)
+      action_probs, curr_values = self.model(src_seq=batch_qs, trg_seq=current_as, use_critic=True)
       m = Categorical(F.softmax(action_probs, dim=-1))
       actions = m.sample().contiguous().view(-1, 1)
 
@@ -139,7 +140,7 @@ class Learner(nn.Module):
 
       # update terms
       rewards = torch.cat((rewards, curr_rewards), dim=1).to(self.device)
-      # values = torch.cat((values, curr_values), dim=1).to(self.device)
+      values = torch.cat((values, curr_values), dim=1).to(self.device)
       log_probs = torch.cat((log_probs, curr_log_probs), dim=1)
 
       # if the action taken is EOS or if end of sequence trajectory ends
@@ -147,15 +148,18 @@ class Learner(nn.Module):
       
     returns = self.get_returns(rewards, batch_size, gamma)
 
-    # advantages = returns - values
-    advantages = returns
+    advantages = returns - values
+    # advantages = returns
     advantages *= advantages_mask
 
     policy_losses = (-log_probs * advantages).mean(dim=-1).mean()
+    value_losses = F.mse_loss(values, rewards, reduction='mean')
     batch_rewards = rewards.sum(dim=-1).mean()
     tb_rewards = torch.div(rewards.sum(dim=-1), current_as.ne(PAD).sum(dim=-1)).mean().item()
 
-    return policy_losses, batch_rewards, tb_rewards
+    loss = policy_losses + value_losses
+
+    return loss, batch_rewards, tb_rewards
 
   def forward_singleton(self, num_updates, data, tb=None, checkpoint_interval=5000, free_interval=25):
     
@@ -255,7 +259,7 @@ class Learner(nn.Module):
 class MetaTrainerSingleton:
 
   def __init__(self, device='cpu', model_params=None, tb=None):
-    self.meta_learner = Learner(process_id=0, gpu=0 if device is not 'cpu' else 'cpu', world_size=1, model_params=model_params, tb=tb)
+    self.meta_learner = Learner(process_id=0, gpu='cpu' if str(device) == 'cpu' else 0, world_size=1, model_params=model_params, tb=tb)
     self.device=device
 
   def train(self, data_loader, num_updates=5, tb=None, num_iterations=250000):

@@ -50,6 +50,7 @@ def main(args):
     torch.backends.cudnn.benchmark = False
 
   
+  
   if args.world_size == 1:
     trainer = MetaTrainerSingleton(device=device, tb=tb)
   else:

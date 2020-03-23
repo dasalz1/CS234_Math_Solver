@@ -73,13 +73,20 @@ class Policy_Network(nn.Module):
         #                             trg_embedding=critic_trg_embedding, 
         #                             src_position_enc=critic_src_position, 
         #                             trg_position_enc=critic_trg_position).cuda()
-    def forward(self, src_seq, trg_seq):
-        action_prob = self.action_transformer(input_ids=src_seq, decoder_input_ids=trg_seq)
-        action_prob = action_prob[:, -1, :]
+    def forward(self, src_seq, trg_seq, use_critic=False):
+        if use_critic:
+            action_prob, values = self.action_transformer(input_ids=src_seq, decoder_input_ids=trg_seq, get_value=True)
+            action_prob = action_prob[:, -1, :]
+            values = values[:, -1, :]
+            return action_prob, values
+        else:
+            action_prob = self.action_transformer(input_ids=src_seq, decoder_input_ids=trg_seq, get_value=False)
+            action_prob = action_prob[:, -1, :]
+            return action_prob
         # state_values = self.value_head(src_seq, trg_seq)
 
         # return action_prob, state_values
-        return action_prob
+        # return action_prob
 
 
 
