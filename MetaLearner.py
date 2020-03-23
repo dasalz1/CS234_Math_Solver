@@ -139,8 +139,6 @@ class Learner(nn.Module):
 
     for copy_param, param in zip(self.model.parameters(), self.model_pi.parameters()):
       param.data.copy_(copy_param.data)
-      # if w_y.bias is not None:
-        # w_y.bias.data = w_x.bias.data.clone()
 
     support_x, support_y, query_x, query_y = map(lambda x: torch.LongTensor(x).to(self.device), data)
     for i in range(num_updates):
@@ -173,7 +171,6 @@ class MetaTrainer:
         curr_data = data_loader.get_sample()
         curr_grads, temp_data = self.meta_learner(num_updates, curr_data)
         sum_grads = [torch.add(i, j) for i, j in zip(sum_grads, curr_grads)] if sum_grads is not None else curr_grads
-
 
       dummy_loss = self.meta_learner.forward_temp(temp_data)
       self._write_grads(sum_grads, dummy_loss)
