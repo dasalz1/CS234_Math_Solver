@@ -173,12 +173,12 @@ class Learner(nn.Module):
       torch.cuda.empty_cache()
 
     support_x, support_y, query_x, query_y = map(lambda x: torch.LongTensor(x).to(self.device), data)
-    for i in range(num_updates):
-      self.meta_optimizer.zero_grad()
-      loss, _, _ = self.policy_batch_loss(support_x, support_y)
-      loss.backward()
-      torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
-      self.meta_optimizer.step()
+    # for i in range(num_updates):
+      # self.meta_optimizer.zero_grad()
+      # loss, _, _ = self.policy_batch_loss(support_x, support_y)
+      # loss.backward()
+      # torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+      # self.meta_optimizer.step()
 
     loss, rewards, tb_rewards = self.policy_batch_loss(query_x, query_y)
     
