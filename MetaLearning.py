@@ -28,13 +28,13 @@ class Learner(nn.Module):
     super(Learner, self).__init__()
     print(gpu)
     self.model = Policy_Network(data_parallel=False, use_gpu=False if gpu is 'cpu' else True)
-    # saved_checkpoint = torch.load("./checkpoint-mle.pth")
-    # model_dict = saved_checkpoint['model']
-    # for k, v in list(model_dict.items()):
-    #   kn = k.replace('module.', '')
-    #   model_dict[kn] = v
-    #   del model_dict[k]
-    # self.model.load_state_dict(model_dict)
+    saved_checkpoint = torch.load("./checkpoint-mle.pth")
+    model_dict = saved_checkpoint['model']
+    for k, v in list(model_dict.items()):
+      kn = k.replace('module.', '')
+      model_dict[kn] = v
+      del model_dict[k]
+    self.model.load_state_dict(model_dict, strict=False)
     if process_id == 0:
       optim_params = (self.model.parameters(),) + optim_params
       self.optimizer = optimizer(*optim_params)
