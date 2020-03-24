@@ -47,10 +47,18 @@ class Learner(nn.Module):
     self.model_pi.train()
     self.num_iter = 0
     self.eps = np.finfo(np.float32).eps.item()
-    self.use_ml = False
-    self.use_rl = False
-    self.trainer = Trainer(self.use_ml, self.use_rl, self.device)
     self.tb = tb
+
+
+  def tb_meta_iter(self, batch_rewards, average_value_loss, batch_idx):
+    self.tb.add_scalars(
+      {
+        "batch_average_rewards" : batch_rewards,
+        "epoch_value_loss": average_value_loss, 
+      },
+    group="policy_train",
+    sub_group="batch",
+    global_step = batch_idx)
 
   def save_checkpoint(self, model, optimizer, iteration):
     torch.save({'model': model.state_dict(), 'optimizer': optimizer.state_dict(),}, "checkpoint-{}.pth".format(iteration))
@@ -64,6 +72,47 @@ class Learner(nn.Module):
     else:
       # 1 if character is correct
       return (actions_pred==actions).float()
+
+  def compute_mle_loss(self, pred, target, smoothing, log=False):
+    def compute_loss(pred, target, smoothing):
+      target = target.contiguous().view(-1)
+      if smoothing:
+        eps = 0.1
+        n_class = pred.size(1)
+
+        one_hot = torch.zeros_like(pred)
+        one_hot = one_hot.scatter(1, target.view(-1, 1), 1)
+        one_hot = one_hot * (1 - eps) + (1 - one_hot) * eps / (n_class - 1)
+        log_prb = F.log_softmax(pred, dim=1)
+
+        non_pad_mask = target.ne(PAD)
+        loss = -(one_hot * log_prb).sum(dim=1)
+        loss = loss.masked_select(non_pad_mask).sum()  # average later
+      else:
+        
+        loss = F.cross_entropy(pred, target, ignore_index=PAD, reduction='sum')    
+      return loss
+    
+    loss = compute_loss(pred, target, smoothing)
+    pred_max = pred.max(1)[1]
+    target = target.contiguous().view(-1)
+    non_pad_mask = target.ne(PAD)
+    n_correct = pred_max.eq(target)
+    n_correct = n_correct.masked_select(non_pad_mask).sum().item()
+
+    return loss, n_correct
+
+
+  def mle_batch_loss(self, batch_qs, batch_as):
+    trg_as = batch_as[:, 1:]
+    pred_logits = self.model(input_ids=batch_qs, decoder_input_ids=batch_as[:, :-1])
+    pred_logits = pred_logits.reshape(-1, pred_logits.size(2))
+    loss, n_correct = self.compute_mle_loss(pred_logits, trg_as, smoothing=True)
+    
+    non_pad_mask = trg_as.ne(PAD)
+    n_char = non_pad_mask.sum().item()
+
+    return loss, n_correct, n_char
   
   def get_returns(self, rewards, batch_size, gamma):
     T = rewards.shape[1]
@@ -132,7 +181,7 @@ class Learner(nn.Module):
     dummy_loss = -m.log_prob(actions.contiguous().view(-1)).contiguous().view(-1, 1).sum() + F.mse_loss(values, torch.zeros_like(values), reduction='mean')
     return dummy_loss
 
-  def forward(self, num_updates, data, tb=None, checkpoint_interval=5000, tb_interval=4):
+  def forward(self, num_updates, data, use_mle=True, use_rl=False, tb=None, checkpoint_interval=5000, tb_interval=4):
 
     if self.num_iter != 0 and self.num_iter % checkpoint_interval == 0:
       self.save_checkpoint(self.model_pi, self.optimizer, self.num_iter)
@@ -143,15 +192,20 @@ class Learner(nn.Module):
     support_x, support_y, query_x, query_y = map(lambda x: torch.LongTensor(x).to(self.device), data)
     for i in range(num_updates):
       self.meta_optimizer.zero_grad()
-      loss, _, _ = self.policy_batch_loss(support_x, support_y)
+      if use_mle:
+        loss, n_correct, n_char = self.mle_batch_loss(support_x, support_y)
+      elif use_rl:
+        loss, _, _ = self.policy_batch_loss(support_x, support_y)
       loss.backward()
       torch.nn.utils.clip_grad_norm_(self.model_pi.parameters(), 1.0)
       self.meta_optimizer.step()
 
-    loss, rewards, tb_rewards = self.policy_batch_loss(query_x, query_y)
-    
-    if self.num_iter != 0 and self.num_iter % tb_interval == 0: self.trainer.tb_policy_batch(self.tb, tb_rewards, loss, self.num_iter, 0, 1)
-
+    if use_mle:
+      loss, n_correct, n_char = self.mle_batch_loss(support_x, support_y)
+      if self.num_iter != 0 and self.num_iter % tb_interval == 0: self.tb_meta_iter(n_correct/n_char, loss, self.num_iter)
+    elif use_rl:
+      loss, rewards, tb_rewards = self.policy_batch_loss(query_x, query_y)
+      if self.num_iter != 0 and self.num_iter % tb_interval == 0: self.tb_meta_iter(tb_rewards, loss, self.num_iter)
     all_grads = autograd.grad(loss, self.model_pi.parameters(), create_graph=True)
     self.num_iter += 1
 
