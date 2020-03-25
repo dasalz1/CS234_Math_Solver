@@ -28,7 +28,7 @@ class TeacherTrainer:
 		self.student_optimizer = student_optimizer
 		self.tb = tb
 		self.validation_samples = validation_samples
-
+ 
 	def train_teacher(self, data_loader=None, K=10, task_batch_size=10, num_categories=1, num_iterations=100000):
 		category_acc = [0.0]*num_categories
 		for num_idx in tqdm(range(num_iterations), mininterval=2, leave=False):
@@ -42,7 +42,7 @@ class TeacherTrainer:
 			category_probs_mod = category_probs + (0.05 - torch.rand_like(category_probs)*0.1)
 
 			# sample K tasks for this iteration using the normalized modified category probs
-			tasks = Categorical(category_probs_mod/category_probs_mods.sum()).sample((K,))
+			tasks = Categorical(F.softmax(category_probs_mod, dim=-1)).sample((K,))
 
 			valid_grads = [0.0]*num_categories
 			accs = [[] for _ in range(num_categories)]
@@ -51,7 +51,8 @@ class TeacherTrainer:
 			task_counts = [0]*num_categories
 
 			for task in tasks:
-				data = map(lambda x: torch.LongTensor(x).to(self.device), data_loader[task].get_sample())
+				data = data_loader[task].get_sample()
+				data = map(lambda x: torch.LongTensor(x).to(self.device), data)
 				task_counts[task] += 1
 				loss, acc = self.student_model.loss_op(data=data, op=self.op)
 
