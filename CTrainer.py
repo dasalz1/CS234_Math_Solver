@@ -79,7 +79,7 @@ class TeacherTrainer:
 				self.student_model.write_grads(sum_grads, self.student_optimizer, (data[2], data[3]), op)
 
 			valid_grads, valid_losses, avg_acc, avg_loss = self.create_labels(tasks, valid_grads, category_acc, 
-									accs, losses, task_counts, iter_acc, iter_loss, data_loader)
+									accs, losses, task_counts, iter_acc, iter_loss, num_categories, data_loader)
 
 			self.tb.add_scalars({"iteration_acc": avg_acc, "iteration_loss": avg_loss}, group="train", global_step=num_idx)
 
@@ -93,7 +93,8 @@ class TeacherTrainer:
 				self.teacher_optimizer.step()
 				self.teacher_optimizer.zero_grad()
 
-	def create_labels(self, tasks, valid_grads, category_acc, accs, losses, task_counts, iter_acc, iter_loss, data_loader=None):
+	def create_labels(self, tasks, valid_grads, category_acc, accs, losses, task_counts, iter_acc, iter_loss, num_categories, data_loader=None):
+		valid_losses = [0.0]*num_categories
 		for task in np.unique(tasks):
 			if 'meta' in self.op:
 				# accumulate validation gradients and metrics from task for loop
@@ -106,8 +107,7 @@ class TeacherTrainer:
 				loss, acc = self.student_model.loss_op(valid_data, self.op)
 				category_acc[task] = category_acc[task]/2 + acc/2
 				grads = autograd.grad(loss, self.student_model.parameters(), create_graph=True, allow_unused=True)
-
-				grads = sum([(grad.data/task_counts[task]).abs().mean() for grad in grads]).item()
+				grads = sum([(grad[0]/task_counts[task]).abs().mean() for grad in grads if grad is not None]).item()
 				loss = loss.item()
 				iter_acc.append(acc); iter_loss.append(loss)
 
