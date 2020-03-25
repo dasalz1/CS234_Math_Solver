@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.distributions import Categorical
+from tensorboard_utils import *
 import numpy as np
 from tqdm import tqdm
 from parameters import VOCAB_SIZE, MAX_ANSWER_SIZE, MAX_QUESTION_SIZE
@@ -100,71 +101,6 @@ class Trainer:
 
     return loss, n_correct
 
-  def tb_mle_batch(self, tb, total_loss, n_char_total, n_char_correct, epoch, batch_idx, data_len):
-    tb.add_scalars(
-      {
-        "loss_per_char" : total_loss / n_char_total,
-        "accuracy": n_char_correct / n_char_total,
-      },
-    group="mle_train",
-    sub_group="batch",
-    global_step = epoch*data_len+batch_idx)
-
-  def tb_mle_epoch(self, tb, loss_per_char, accuracy, epoch):
-    tb.add_scalars(
-      {
-        "loss_per_char" : loss_per_char,
-        "accuracy" : accuracy,
-      },
-      group="train",
-      sub_group="epoch",
-      global_step=epoch
-    )
-
-  def tb_policy_batch(self, tb, batch_rewards, average_value_loss, epoch, batch_idx, data_len):
-    tb.add_scalars(
-      {
-        "batch_average_rewards" : batch_rewards,
-        "epoch_value_loss": average_value_loss, 
-      },
-    group="policy_train",
-    sub_group="batch",
-    global_step = epoch*data_len+batch_idx)
-
-  def tb_policy_epoch(self, tb, average_rewards, average_value_loss, epoch):
-    tb.add_scalars(
-      {
-        "epoch_average_reward" : average_rewards,
-        "epoch_value_loss": average_value_loss, 
-      },
-      group="train",
-      sub_group="epoch",
-      global_step=epoch
-    )
-  
-  def tb_mle_policy_batch(self, tb, total_loss, n_char_total, n_char_correct, batch_rewards, epoch, batch_idx, data_len):
-    tb.add_scalars(
-      {
-        "loss_per_char" : total_loss / n_char_total,
-        "accuracy": n_char_correct / n_char_total,
-        "batch_average_rewards" : batch_rewards,
-      },
-    group="mle_policy_train",
-    sub_group="batch",
-    global_step = epoch*data_len+batch_idx)
-
-  def tb_mle_policy_epoch(self, tb, loss_per_char, accuracy, average_rewards, epoch):
-    tb.add_scalars(
-      {
-        "loss_per_char" : loss_per_char,
-        "accuracy" : accuracy,
-        "epoch_average_reward" : average_rewards,
-      },
-      group="train",
-      sub_group="epoch",
-      global_step=epoch
-    )
-
   def train(self, training_data, model, optimizer, scheduler=None, tb=None, epochs=20, log_interval=100, checkpoint_interval=10000):
     
     curr_epoch, model, optimizer, scheduler = self.from_checkpoint_if_exists(model, optimizer, scheduler)
@@ -225,11 +161,11 @@ class Trainer:
 
         if tb is not None and batch_idx % log_interval == 0:
           if self.use_mle:
-            self.tb_mle_batch(tb, total_mle_loss, n_char_total, n_char_correct, epoch, batch_idx, len(training_data))
+            tb_mle_batch(tb, total_mle_loss, n_char_total, n_char_correct, epoch, batch_idx, len(training_data))
           elif self.use_rl:
-            self.tb_policy_batch(tb, batch_rewards, value_losses, epoch, batch_idx, len(training_data))
+            tb_policy_batch(tb, batch_rewards, value_losses, epoch, batch_idx, len(training_data))
           else:
-            self.tb_mle_policy_batch(tb, total_mle_loss, n_char_total, n_char_correct, batch_rewards, value_losses, epoch, batch_idx, len(training_data))
+            tb_mle_policy_batch(tb, total_mle_loss, n_char_total, n_char_correct, batch_rewards, value_losses, epoch, batch_idx, len(training_data))
             # self.tb_mle_policy_batch(tb, total_mle_loss, n_char_total, n_char_correct, batch_rewards, epoch, batch_idx, len(training_data))
       
       if self.use_mle and batch_idx != 0 and iterations % checkpoint_interval == 0:
@@ -248,11 +184,11 @@ class Trainer:
       
       if tb is not None:
         if self.use_mle:
-          self.tb_mle_epoch(tb, loss_per_char, accuracy, epoch)
+          tb_mle_epoch(tb, loss_per_char, accuracy, epoch)
         elif self.use_rl:
           self.tb_policy_epoch(tb, average_rewards, average_value_loss, epoch)
         else:
-          self.tb_mle_policy_epoch(tb, loss_per_char, accuracy, average_rewards, average_value_loss, epoch)
+          tb_mle_policy_epoch(tb, loss_per_char, accuracy, average_rewards, average_value_loss, epoch)
           # self.tb_mle_policy_epoch(tb, loss_per_char, accuracy, average_rewards, epoch)
 
   def mle_batch_loss(self, batch_qs, batch_as, model):

@@ -4,6 +4,72 @@ import datetime
             
 from tensorboard.backend.event_processing import event_accumulator
 
+
+def tb_mle_batch(self, tb, total_loss, n_char_total, n_char_correct, batch_idx):
+    tb.add_scalars(
+        {
+        "loss_per_char" : total_loss / n_char_total,
+        "accuracy": n_char_correct / n_char_total,
+        },
+        group="mle_train",
+        sub_group="batch",
+        global_step = batch_idx)
+
+# def tb_mle_epoch(self, tb, loss_per_char, accuracy, epoch):
+#     tb.add_scalars(
+#         {
+#         "loss_per_char" : loss_per_char,
+#         "accuracy" : accuracy,
+#         },
+#         group="train",
+#         sub_group="epoch",
+#         global_step=epoch
+#     )
+
+def tb_policy_batch(self, tb, batch_rewards, average_value_loss, batch_idx):
+    tb.add_scalars(
+      {
+        "batch_average_rewards" : batch_rewards,
+        "epoch_value_loss": average_value_loss, 
+      },
+    group="policy_train",
+    sub_group="batch",
+    global_step = batch_idx)
+
+def tb_policy_epoch(self, tb, average_rewards, average_value_loss, epoch):
+    tb.add_scalars(
+      {
+        "epoch_average_reward" : average_rewards,
+        "epoch_value_loss": average_value_loss, 
+      },
+      group="train",
+      sub_group="epoch",
+      global_step=epoch
+    )
+  
+def tb_mle_policy_batch(self, tb, total_loss, n_char_total, n_char_correct, batch_rewards, epoch, batch_idx, data_len):
+    tb.add_scalars(
+    {
+        "loss_per_char" : total_loss / n_char_total,
+        "accuracy": n_char_correct / n_char_total,
+        "batch_average_rewards" : batch_rewards,
+    },
+    group="mle_policy_train",
+    sub_group="batch",
+    global_step = epoch*data_len+batch_idx)
+
+def tb_mle_policy_epoch(self, tb, loss_per_char, accuracy, average_rewards, epoch):
+    tb.add_scalars(
+    {
+        "loss_per_char" : loss_per_char,
+        "accuracy" : accuracy,
+        "epoch_average_reward" : average_rewards,
+    },
+    group="train",
+    sub_group="epoch",
+    global_step=epoch
+    )
+
    
 def tensorboard_event_accumulator(
     file,
