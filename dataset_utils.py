@@ -11,7 +11,7 @@ def _filter_and_flatten(categories, modules_):
     flat = collections.OrderedDict()
     sample_categories = []
     for category in categories:
-        print()
+        
         if category in sample_categories: continue
         if category in full_categories:
             for subc in subcategories[category]:

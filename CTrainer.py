@@ -6,6 +6,7 @@ from tensorboard_utils import *
 from torch import autograd
 from torch.distributions.categorical import Categorical
 from tqdm import tqdm
+import numpy as np
 
 class TeacherTrainer:
 
@@ -49,6 +50,7 @@ class TeacherTrainer:
 			losses = [[] for _ in range(num_categories)]
 			sum_grads = None
 			task_counts = [0]*num_categories
+			iter_acc = []; iter_loss = []
 
 			for task in tasks:
 				data = data_loader[task].get_sample()
@@ -72,12 +74,12 @@ class TeacherTrainer:
 
 			if 'meta' in self.op:
 				# average gradients and apply meta gradients
-				sum_grads = [grad/K for grad in sum_grads]
+				for idx in range(len(sum_grads)):
+					sum_grads[idx].data = sum_grads[idx].data/K
 				self.student_model.write_grads(sum_grads, self.student_optimizer, (data[2], data[3]), op)
 
 			valid_grads, valid_losses, avg_acc, avg_loss = self.create_labels(tasks, valid_grads, category_acc, 
-									accs, losses, task_counts, iter_acc, iter_loss)
-
+									accs, losses, task_counts, iter_acc, iter_loss, data_loader)
 
 			self.tb.add_scalars({"iteration_acc": avg_acc, "iteration_loss": avg_loss}, group="train", global_step=num_idx)
 
@@ -91,22 +93,21 @@ class TeacherTrainer:
 				self.teacher_optimizer.step()
 				self.teacher_optimizer.zero_grad()
 
-
-
-	def create_labels(self, tasks, valid_grads, category_acc, accs, losses, task_counts, iter_acc, iter_loss):
+	def create_labels(self, tasks, valid_grads, category_acc, accs, losses, task_counts, iter_acc, iter_loss, data_loader=None):
 		for task in np.unique(tasks):
 			if 'meta' in self.op:
 				# accumulate validation gradients and metrics from task for loop
-				grads = sum([grad/task_counts[task].abs().mean() for grad in valid_grads[task]]).item()
+				grads = sum([grad.data/task_counts[task].abs().mean() for grad in valid_grads[task]]).item()
 				category_acc[task] = category_acc[task]/2 + np.mean(accs[task])/2
 				loss = np.mean(losses[task])
 			else:
 				# create, process and accumulate validation gradients and metrics for tasks sampled in for loop
-				valid_data = map(lambda x: x.to(self.device), data_loader[task].get_valid_sample(self.validation_samples))
+				valid_data = map(lambda x: torch.LongTensor(x).to(self.device), data_loader[task].get_valid_sample(self.validation_samples))
 				loss, acc = self.student_model.loss_op(valid_data, self.op)
 				category_acc[task] = category_acc[task]/2 + acc/2
-				grads = autograd.grad(loss, self.student_model.parameters(), create_graph=True)
-				grads = sum([(grad/task_counts[task]).abs().mean() for grad in grads]).item()
+				grads = autograd.grad(loss, self.student_model.parameters(), create_graph=True, allow_unused=True)
+
+				grads = sum([(grad.data/task_counts[task]).abs().mean() for grad in grads]).item()
 				loss = loss.item()
 				iter_acc.append(acc); iter_loss.append(loss)
 

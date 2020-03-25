@@ -42,11 +42,9 @@ measurement_categories = ['conversion', 'time']
 numbers_categories = ['gcd',
             'gcd_composed'
             'lcm',
-            'lcm_composed',
             'div_remainder',
             'div_remainder_composed'
             'is_prime',
-            'is_prime_composed',
             'is_factor',
             'is_factor_composed',
             'round_number',

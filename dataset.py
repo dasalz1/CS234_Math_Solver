@@ -34,7 +34,6 @@ class GeneratorDataset(Dataset):
         filtered_modules = _filter_and_flatten(self.categories, initial_modules)
         self.sampled_modules = list(six.iteritems(filtered_modules))
 
-
     def __getitem__(self, idx, num_probs=-1):
         if self.iter % self.refresh_rate == 0: self._create_modules()
         try:
@@ -67,7 +66,7 @@ class GeneratorDataset(Dataset):
         return ques, ans
 
     def get_valid_sample(self, num_samples=1):
-        return self.__getitem(0, num_samples)
+        return self.__getitem__(0, num_samples)
 
     def get_sample(self):
         return self.__getitem__(0)
