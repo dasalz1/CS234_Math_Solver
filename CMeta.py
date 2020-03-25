@@ -49,8 +49,7 @@ class Learner(nn.Module):
       torch.nn.utils.clip_grad_norm_(self.model_pi.parameters(), 1.0)
       self.meta_optimizer.step()
 
-    loss, acc = self.model_pi.loss_op(data=(query_ques, query_ans), op=op, tb=tb, num_iter=num_iter)
-
+    loss, acc = self.model_pi.loss_op(data=(query_ques, query_ans), op=op)
     return loss, acc
 
   def forward_temp(self, temp_data, op):
