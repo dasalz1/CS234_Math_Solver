@@ -74,6 +74,8 @@ subcategories = {'algebra': algebra_subcategories, 'arithmetic': arithmetic_subc
 				'numbers': numbers_categories, 'polynomials': polynomials_categories, 
 				'probability': probability_categories}
 
+all_subcategories = [subc for c in list(subcategories.values()) for subc in c]
+
 
 def get_sub_categories(category):
 	return subcategories[category]

@@ -11,16 +11,17 @@ def _filter_and_flatten(categories, modules_):
     flat = collections.OrderedDict()
     sample_categories = []
     for category in categories:
+        print()
         if category in sample_categories: continue
         if category in full_categories:
             for subc in subcategories[category]:
-                sample_categories.append(category + '__' + subc)
+                sample_categories.append(category + '_' + subc)
         else:
             sample_categories.append(category)
 
     def add(submodules, prefix=None):
         for key, module_or_function in six.iteritems(submodules):
-            full_name = prefix + '__' + key if prefix is not None else key
+            full_name = prefix + '_' + key if prefix is not None else key
             if isinstance(module_or_function, dict):
                 add(module_or_function, full_name)
             else:

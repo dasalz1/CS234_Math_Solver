@@ -12,33 +12,65 @@ from parameters import MAX_QUESTION_SIZE, MAX_ANSWER_SIZE
 
 class GeneratorDataset(Dataset):
     
-    def __init__(self, categories=["algebra__linear_1d", "probability"], difficulty=0.5, num_iterations=12, batch_size=4, refresh_rate=10000):
+    def __init__(self, categories=["algebra__linear_1d", "probability"], num_iterations=12, batch_size=4, refresh_rate=10000):
         super(GeneratorDataset, self).__init__()
         self.categories = categories
         self._create_modules()
         self.num_iterations = num_iterations
-        self.refresh_rate = refresh_rate
+        self.refresh_rate = refresh_rate    
         self.iter = 1
+        self.batch_size=batch_size
 
     def __len__(self):
         return self.num_iterations
 
-    def _create_modules(self):
+    def getProblem(self, sample_module, problem_data):
+        support_problem = sample_from_module(sample_module, show_dropped=False)[0]
+        support_problem = (np_encode_string(str(support_problem[0])), np_encode_string(str(support_problem[1])))
+        problem_data.append(support_problem)
+
+    def _create_modules(self, difficulty=0.5):
         initial_modules = modules.train(_make_entropy_fn(difficulty, 1))
         filtered_modules = _filter_and_flatten(self.categories, initial_modules)
         self.sampled_modules = list(six.iteritems(filtered_modules))
 
-    def __getitem__(self, idx):
+
+    def __getitem__(self, idx, num_probs=-1):
         if self.iter % self.refresh_rate == 0: self._create_modules()
         try:
-            problem = sample_from_module(self.sampled_modules[np.random.randint(0, len(self.sampled_modules), (1))[0]][1], show_dropped=False)[0]
-            # converts to tokens and adds BOS and EOS tokens
-            ques, anws = np_encode_string(str(problem[0])), np_encode_string(str(problem[1])) 
+            prob_data = []
+            # problem_threads = []
+
+            sample_module = self.sampled_modules[np.random.randint(0, len(self.sampled_modules))][1]
+
+            num_probs = self.batch_size if num_probs == -1 else num_probs
+            for _ in range(num_probs):
+                self.getProblem(sample_module, prob_data)
+                # problem_threads.append(Thread(target=self.getProblem, args=(sample_module, prob_data,)))
+                # problem_threads[-1].start()
+
+            # for p_t in problem_threads:
+                # p_t.join()
+
+            if len(prob_data) < num_probs:
+                return self.__getitem__(0)
+
+            ques, ans = zip(*prob_data)
+
+            ques = pd.DataFrame(ques).fillna(PAD).values.reshape(num_probs, -1)
+            ans = pd.DataFrame(ans).fillna(PAD).values.reshape(num_probs, -1)
+
         except:
             return self.__getitem__(idx)
 
         self.iter += 1
-        return ques, anws
+        return ques, ans
+
+    def get_valid_sample(self, num_samples=1):
+        return self.__getitem(0, num_samples)
+
+    def get_sample(self):
+        return self.__getitem__(0)
 
 class MetaGeneratorDataset(Dataset):
     
@@ -54,7 +86,7 @@ class MetaGeneratorDataset(Dataset):
     def __len__(self):
         return self.num_iterations
 
-    def _create_modules(self):
+    def _create_modules(self, difficulty=0.5):
         initial_modules = modules.train(_make_entropy_fn(difficulty, 1))
         filtered_modules = _filter_and_flatten(self.categories, initial_modules)
         self.sampled_modules = list(six.iteritems(filtered_modules))

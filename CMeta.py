@@ -2,28 +2,18 @@ import torch
 import torch.distributed as dist
 import torch.nn.functional as F
 from A3C import Policy_Network
-from A3C import Policy_Network
 from torch import nn
 from torch import optim
 from torch import autograd
 from torch.autograd import Variable
-from torch.distributions import Categorical
-from torch.multiprocessing import Process, Queue
-from multiprocessing import Event
 import numpy as np
 import pandas as pd
 import os
-from copy import deepcopy
-from parameters import VOCAB_SIZE, MAX_ANSWER_SIZE, MAX_QUESTION_SIZE
-from dataset import PAD, EOS
-from training import Trainer
 from tqdm import tqdm
 from transformers import AdamW
 
-PAD_IDX = 0
-
 class Learner(nn.Module):
-  def __init__(self, process_id, gpu='cpu', meta_lr=1e-4, checkpoint_path='./checkpoint-mle.pth'):
+  def __init__(self, device, meta_lr=1e-4, checkpoint_path='./checkpoint-mle.pth'):
     super(Learner, self).__init__()
     self.model = Policy_Network(data_parallel=False, use_gpu=False if gpu is 'cpu' else True)
     self.model_pi = Policy_Network(data_parallel=False, use_gpu=False if gpu is 'cpu' else True)
@@ -37,7 +27,7 @@ class Learner(nn.Module):
         del model_dict[k]
     
     self.meta_optimizer = optim.SGD(self.model.parameters(), meta_lr)
-    self.device='cuda:'+str(process_id) if gpu is not 'cpu' else gpu
+    self.device=device
     self.model.to(self.device)
     self.model_pi.to(self.device)
     self.model.train()
@@ -45,20 +35,21 @@ class Learner(nn.Module):
     self.eps = np.finfo(np.float32).eps.item()
 
 
-  def loss_op(self, data, valid_data, op, num_iter):
+  def loss_op(self, data, op, num_iter):
     
+    support_ques, support_ans, query_ques, query_ans = data
     for copy_param, param in zip(self.model.parameters(), self.model_pi.parameters()):
       param.data.copy_(copy_param.data)
 
     for i in range(num_updates):
       self.meta_optimizer.zero_grad()
-      loss, acc = self.model_pi.loss_op(data=data, op=op)
+      loss, acc = self.model_pi.loss_op(data=(support_ques, support_ans), op=op)
 
       loss.backward()
       torch.nn.utils.clip_grad_norm_(self.model_pi.parameters(), 1.0)
       self.meta_optimizer.step()
 
-    loss, acc = self.model_pi.loss_op(data=valid_data, op=op, tb=tb, num_iter=num_iter)
+    loss, acc = self.model_pi.loss_op(data=(query_ques, query_ans), op=op, tb=tb, num_iter=num_iter)
 
     return loss, acc
 
@@ -67,8 +58,7 @@ class Learner(nn.Module):
     dummy_loss, _ = self.model_pi.loss_op(data=(dummy_query_x, dummy_query_y), op=op)#(src_seq=dummy_query_x, trg_seq=dummy_query_y, use_critic=True)
     return dummy_loss
 
-  def write_grads(self, sum_grads, optimizer, dummy_data, op)
-
+  def write_grads(self, sum_grads, optimizer, dummy_data, op):
       dummy_loss = self.forward_temp(dummy_data, op)
       self._write_grads(sum_grads, dummy_loss, optimizer)
 

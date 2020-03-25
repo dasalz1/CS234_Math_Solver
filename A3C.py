@@ -37,34 +37,36 @@ class Policy_Network(nn.Module):
             max_encoder_position_embeddings=n_src_position,
             max_decoder_position_embeddings=n_trg_position
         )
+
         if data_parallel:
-            self.action_transformer = nn.DataParallel(BartModel(bart_config).cuda())
-        elif use_gpu:
-            self.action_transformer = BartModel(bart_config).cuda()
+            self.action_transformer = nn.DataParallel(BartModel(bart_config)).to(self.device)#cuda())
         else:
-            self.action_transformer = BartModel(bart_config)
+            self.action_transformer = BartModel(bart_config).to(self.device)#cuda()
+        # elif use_gpu:
+            # self.action_transformer = BartModel(bart_config).cuda()
+        # else:
+            # self.action_transformer = BartModel(bart_config)
 
     def loss_op(self, data, op, tb=None, num_iter=None, valid_data=None):
-        # batch_qs, batch_as = data
-        batch_qs, batch_as = map(lambda x: torch.LongTensor(x).to(self.device), data)
+        batch_qs, batch_as = data
         if 'rl' in op:
             policy_losses, value_losses, batch_rewards = self.policy_batch_loss(batch_qs, batch_as, 0.9)
 
             return policy_losses+value_losses, batch_rewards
         elif 'mle' in op:
-            mle_loss, n_correct, n_char = self.mle_batch_loss(batch_qs, batch_as, model.action_transformer)
+            mle_loss, n_correct, n_char = self.mle_batch_loss(batch_qs, batch_as)
 
             return mle_loss, n_correct/n_char
 
     def forward(self, src_seq, trg_seq, op='mle'):
-        if op=='rl':
+        if 'rl' in op:
             action_prob, values = self.action_transformer(input_ids=src_seq, decoder_input_ids=trg_seq, get_value=True)
             action_prob = action_prob[:, -1, :]
             values = values[:, -1, :]
             return action_prob, values
         else:
             action_prob = self.action_transformer(input_ids=src_seq, decoder_input_ids=trg_seq, get_value=False)
-            action_prob = action_prob[:, -1, :]
+            # action_prob = action_prob[:, -1, :]
             return action_prob
 
     def calc_reward(self, actions_pred, actions, ignore_index=0, sparse_rewards=False):
@@ -105,22 +107,25 @@ class Policy_Network(nn.Module):
                 loss = -(one_hot * log_prb).sum(dim=1)
                 loss = loss.masked_select(non_pad_mask).sum()  # average later
             else:
-            loss = F.cross_entropy(pred, target, ignore_index=PAD, reduction='sum')    
-        return loss
+                loss = F.cross_entropy(pred, target, ignore_index=PAD, reduction='sum')    
+            return loss
     
-    loss = compute_loss(pred, target, smoothing)
-    pred_max = pred.max(1)[1]
-    target = target.contiguous().view(-1)
-    non_pad_mask = target.ne(PAD)
-    n_correct = pred_max.eq(target)
-    n_correct = n_correct.masked_select(non_pad_mask).sum().item()
+        loss = compute_loss(pred, target, smoothing)
+        pred_max = pred.max(1)[1]
+        target = target.contiguous().view(-1)
+        non_pad_mask = target.ne(PAD)
+        n_correct = pred_max.eq(target)
+        n_correct = n_correct.masked_select(non_pad_mask).sum().item()
 
-    return loss, n_correct
+        return loss, n_correct
 
     def mle_batch_loss(self, batch_qs, batch_as):
         trg_as = batch_as[:, 1:]
-        pred_logits = self.model(input_ids=batch_qs, decoder_input_ids=batch_as[:, :-1])
-        pred_logits = pred_logits.reshape(-1, pred_logits.size(2))
+        # print(batch_qs.shape)
+        # print(batch_as.shape)
+        pred_logits = self.forward(src_seq=batch_qs, trg_seq=batch_as[:, :-1], op='mle')#(input_ids=batch_qs, decoder_input_ids=batch_as[:, :-1])
+        # print(pred_logits.shape)
+        pred_logits = pred_logits.reshape(-1, pred_logits.size(-1))
         loss, n_correct = self.compute_mle_loss(pred_logits, trg_as, smoothing=True)
 
         non_pad_mask = trg_as.ne(PAD)
@@ -139,7 +144,7 @@ class Policy_Network(nn.Module):
 
         for t in range(1, max_len_sequence):
             advantages_mask = torch.cat((advantages_mask, complete), dim=1)
-            action_probs, curr_values = self.forward(src_seq=batch_qs, trg_seq=current_as, 'rl')
+            action_probs, curr_values = self.forward(src_seq=batch_qs, trg_seq=current_as, op='rl')
             m = Categorical(F.softmax(action_probs, dim=-1))
             actions = m.sample().reshape(-1, 1)
 
@@ -165,9 +170,9 @@ class Policy_Network(nn.Module):
         # advantages = returns
         advantages *= advantages_mask
 
-    policy_losses = (-log_probs * advantages).sum(dim=-1).mean()
-    value_losses = F.mse_loss(values, rewards, reduction='mean')
-    # batch_rewards = rewards.sum(dim=-1).mean()
-    tb_rewards = torch.div(rewards.sum(dim=-1), current_as.ne(PAD).sum(dim=-1)).mean().item()
-    # return policy_losses, value_losses, batch_rewards
-    return policy_losses, value_losses, tb_rewards
+        policy_losses = (-log_probs * advantages).sum(dim=-1).mean()
+        value_losses = F.mse_loss(values, rewards, reduction='mean')
+        # batch_rewards = rewards.sum(dim=-1).mean()
+        tb_rewards = torch.div(rewards.sum(dim=-1), current_as.ne(PAD).sum(dim=-1)).mean().item()
+        # return policy_losses, value_losses, batch_rewards
+        return policy_losses, value_losses, tb_rewards
