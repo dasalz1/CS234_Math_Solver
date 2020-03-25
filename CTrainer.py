@@ -20,7 +20,7 @@ class TeacherTrainer:
 			self.teacher_optimizer = optim.SGD(self.teacher_model.parameters(), teacher_lr)
 			self.loss_scale = 1
 		else:
-			self.teacher_params = torch.Variable(torch.FloatTensor([1/num_categories]*num_categories).contiguous().view(-1), requires_grad=True)
+			self.teacher_params = torch.Variable(torch.FloatTensor([1/num_categories]*num_categories).contiguous().view(-1), requires_grad=True).to(self.device)
 			# scale loss if parametrizing distribution directly
 			self.loss_scale = teacher_lr
 
@@ -34,7 +34,7 @@ class TeacherTrainer:
 		for num_idx in tqdm(range(num_iterations), mininterval=2, leave=False):
 
 			if self.teacher_model:
-				category_probs = self.teacher_model(torch.FloatTensor(category_acc).contiguous().view(1, -1)).contiguous().view(-1)
+				category_probs = self.teacher_model(torch.FloatTensor(category_acc).contiguous().view(1, -1).to(self.device)).contiguous().view(-1)
 			else:
 				category_probs = self.teacher_params
 
@@ -81,8 +81,8 @@ class TeacherTrainer:
 
 			self.tb.add_scalars({"iteration_acc": avg_acc, "iteration_loss": avg_loss}, group="train", global_step=num_idx)
 
-			valid_grads = torch.FloatTensor(valid_grads).contiguous().view(-1)
-			valid_losses = torch.FloatTensor(valid_losses).contiguous().view(-1)
+			valid_grads = torch.FloatTensor(valid_grads).contiguous().view(-1).to(self.device)
+			valid_losses = torch.FloatTensor(valid_losses).contiguous().view(-1).to(self.device)
 			# loss scale is in case parameters are direct distribution, in essence the learning rate
 			teacher_loss = (torch.dot(category_probs, valid_grads) +  torch.dot(category_probs, valid_losses))*self.loss_scale
 

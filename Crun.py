@@ -64,7 +64,7 @@ def main(args):
   
   teacher_model = None
   if args.teacher_network:
-    teacher_model = CurriculumNetwork(input_size=num_categories, output_size=num_categories, hidden_layer_size=args.teacher_hidden_size)
+    teacher_model = CurriculumNetwork(input_size=num_categories, output_size=num_categories, hidden_layer_size=args.teacher_hidden_size).to(device)
 
   student_optimizer = AdamW(student_model.parameters(), args.student_lr)
   trainer = TeacherTrainer(op=args.op, device=device, teacher_network=args.teacher_network, teacher_model=teacher_model,
