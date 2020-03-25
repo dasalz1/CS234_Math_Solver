@@ -221,7 +221,7 @@ class Trainer:
       
       # update decoder output
       current_as = torch.cat((current_as, actions), dim=1)
-      curr_log_probs = -m.log_prob(actions.contiguous.view(-1)).contiguous().view(-1, 1)
+      curr_log_probs = m.log_prob(actions.contiguous.view(-1)).contiguous().view(-1, 1)
       # calculate reward based on character cross entropy
       curr_rewards = self.calc_reward(actions, trg_t)
       
