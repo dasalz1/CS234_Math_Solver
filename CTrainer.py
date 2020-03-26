@@ -44,7 +44,6 @@ class TeacherTrainer:
 
 			# sample K tasks for this iteration using the normalized modified category probs
 			tasks = Categorical(F.softmax(category_probs_mod, dim=-1)).sample((K,))
-
 			valid_grads = [0.0]*num_categories
 			accs = [[] for _ in range(num_categories)]
 			losses = [[] for _ in range(num_categories)]
@@ -53,18 +52,16 @@ class TeacherTrainer:
 			iter_acc = []; iter_loss = []
 
 			for task in tasks:
-				data = data_loader[task].get_sample()
-				data = map(lambda x: torch.LongTensor(x).to(self.device), data)
+				data = map(lambda x: torch.LongTensor(x).to(self.device), data_loader[task].get_sample())
 				task_counts[task] += 1
 				loss, acc = self.student_model.loss_op(data=data, op=self.op)
-
 				# if meta model accumulate all gradients here for final optimization and store validation values here since query is in essence query
 				if 'meta' in self.op:
-					curr_grads = autograd.grad(loss, self.student_model.parameters(), create_graph=True)
-					sum_grads = [torch.add(i, j) for i, j in zip(sum_grads, curr_grads)] if sum_grads is not None else curr_grads
-					valid_grads[task] = [torch.add(i, j) for i, j in zip(valid_grads[task], curr_grads)] if valid_grads[task] is not 0.0 else curr_grads
-					accs[task].append(acc); losses[task].append(loss)
-					iter_loss.append(loss); iter_acc.append(acc)
+					curr_grads = autograd.grad(loss, self.student_model.parameters(), create_graph=True, allow_unused=True)
+					sum_grads = [torch.add(i, j) for i, j in zip(sum_grads, curr_grads) if (j is not None and i is not None)] if sum_grads is not None else curr_grads
+					valid_grads[task] = [torch.add(i, j) for i, j in zip(valid_grads[task], curr_grads) if (j is not None and i is not None)] if valid_grads[task] is not 0.0 else curr_grads
+					accs[task].append(acc); losses[task].append(loss.item())
+					iter_loss.append(loss.item()); iter_acc.append(acc)
 
 				# regular optimization step
 				else:
@@ -76,13 +73,15 @@ class TeacherTrainer:
 				# average gradients and apply meta gradients
 				for idx in range(len(sum_grads)):
 					sum_grads[idx].data = sum_grads[idx].data/K
-				self.student_model.write_grads(sum_grads, self.student_optimizer, (data[2], data[3]), op)
+
+				data = map(lambda x: torch.LongTensor(x).to(self.device), data_loader[task].get_sample())
+				_, _, dummy_x, dummy_y = data
+				self.student_model.write_grads(sum_grads, self.student_optimizer, (dummy_x, dummy_y), self.op)
 
 			valid_grads, valid_losses, avg_acc, avg_loss = self.create_labels(tasks, valid_grads, category_acc, 
 									accs, losses, task_counts, iter_acc, iter_loss, num_categories, data_loader)
 
-			self.tb.add_scalars({"iteration_acc": avg_acc, "iteration_loss": avg_loss}, group="train", global_step=num_idx)
-
+			self.tb.add_scalars({"avg_accuracy": avg_acc, "avg_loss": avg_loss, "average_running_accuracy": np.mean(category_acc)}, group="train", sub_group="batch", global_step=num_idx)
 			valid_grads = torch.FloatTensor(valid_grads).contiguous().view(-1).to(self.device)
 			valid_losses = torch.FloatTensor(valid_losses).contiguous().view(-1).to(self.device)
 			# loss scale is in case parameters are direct distribution, in essence the learning rate
@@ -95,10 +94,11 @@ class TeacherTrainer:
 
 	def create_labels(self, tasks, valid_grads, category_acc, accs, losses, task_counts, iter_acc, iter_loss, num_categories, data_loader=None):
 		valid_losses = [0.0]*num_categories
-		for task in np.unique(tasks):
+		unique_tasks = np.unique(tasks); num_tasks = len(unique_tasks)
+		for task in unique_tasks:
 			if 'meta' in self.op:
 				# accumulate validation gradients and metrics from task for loop
-				grads = sum([grad.data/task_counts[task].abs().mean() for grad in valid_grads[task]]).item()
+				grads = sum([grad.data/task_counts[task].abs().mean() for grad in valid_grads[task] if grad is not None])
 				category_acc[task] = category_acc[task]/2 + np.mean(accs[task])/2
 				loss = np.mean(losses[task])
 			else:
@@ -107,13 +107,17 @@ class TeacherTrainer:
 				loss, acc = self.student_model.loss_op(valid_data, self.op)
 				category_acc[task] = category_acc[task]/2 + acc/2
 				grads = autograd.grad(loss, self.student_model.parameters(), create_graph=True, allow_unused=True)
-				grads = sum([(grad[0]/task_counts[task]).abs().mean() for grad in grads if grad is not None]).item()
+				grads = sum([(grad.data/task_counts[task]).abs().mean() for grad in grads if grad is not None])
 				loss = loss.item()
 				iter_acc.append(acc); iter_loss.append(loss)
 
 			valid_grads[task] = grads
 			valid_losses[task] = loss
 		
+		# for task in list(range(num_categories)) - list(unique_tasks):
+			# valid_grads[task] = np.sum(valid_grads)/num_tasks
+			# valid_losses[task] = np.sum(valid_losses)/num_tasks
+
 		return valid_grads, valid_losses, np.mean(iter_acc), np.mean(iter_loss)
 
 

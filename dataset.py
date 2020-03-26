@@ -8,7 +8,7 @@ from mathematics_dataset.modules import modules
 from utils import np_encode_string
 from threading import Thread
 from parameters import MAX_QUESTION_SIZE, MAX_ANSWER_SIZE
-
+from multiprocessing import Process, Queue
 
 class GeneratorDataset(Dataset):
     
@@ -24,10 +24,10 @@ class GeneratorDataset(Dataset):
     def __len__(self):
         return self.num_iterations
 
-    def getProblem(self, sample_module, problem_data):
+    def getProblem(self, sample_module, problem_queue):
         support_problem = sample_from_module(sample_module, show_dropped=False)[0]
         support_problem = (np_encode_string(str(support_problem[0])), np_encode_string(str(support_problem[1])))
-        problem_data.append(support_problem)
+        problem_queue.put(support_problem)
 
     def _create_modules(self, difficulty=0.5):
         initial_modules = modules.train(_make_entropy_fn(difficulty, 1))
@@ -37,22 +37,20 @@ class GeneratorDataset(Dataset):
     def __getitem__(self, idx, num_probs=-1):
         if self.iter % self.refresh_rate == 0: self._create_modules()
         try:
+            problem_queue = Queue()
+            problem_processes = []
             prob_data = []
-            # problem_threads = []
-
             sample_module = self.sampled_modules[np.random.randint(0, len(self.sampled_modules))][1]
 
             num_probs = self.batch_size if num_probs == -1 else num_probs
             for _ in range(num_probs):
-                self.getProblem(sample_module, prob_data)
-                # problem_threads.append(Thread(target=self.getProblem, args=(sample_module, prob_data,)))
-                # problem_threads[-1].start()
+                # self.getProblem(sample_module, prob_data)
+                problem_processes.append(Process(target=self.getProblem, args=(sample_module, problem_queue,)))
+                problem_processes[-1].start()
 
-            # for p_t in problem_threads:
-                # p_t.join()
-
-            if len(prob_data) < num_probs:
-                return self.__getitem__(0)
+            for p_t in problem_processes:
+                prob_data.append(problem_queue.get())
+                p_t.join()
 
             ques, ans = zip(*prob_data)
 
@@ -75,11 +73,12 @@ class MetaGeneratorDataset(Dataset):
     
     def __init__(self, categories=["algebra__linear_1d", "probability"], difficulty=0.5, num_iterations=32, query_batch_size=4, k_shot=5, refresh_rate=100):
         super(MetaGeneratorDataset, self).__init__()
-        self._create_modules()
         self.num_iterations = num_iterations
         self.k_shot = k_shot
         self.categories = categories
         self.query_batch_size = query_batch_size
+        self.refresh_rate = refresh_rate
+        self._create_modules()
         self.iter = 1
 
     def __len__(self):
@@ -90,49 +89,56 @@ class MetaGeneratorDataset(Dataset):
         filtered_modules = _filter_and_flatten(self.categories, initial_modules)
         self.sampled_modules = list(six.iteritems(filtered_modules))
 
-    def supportProblem(self, sample_module, problem_data):
+    def getProblem(self, sample_module, problem_queue):
         support_problem = sample_from_module(sample_module, show_dropped=False)[0]
         support_problem = (np_encode_string(str(support_problem[0])), np_encode_string(str(support_problem[1])))
-        problem_data.append(support_problem)
+        problem_queue.put(support_problem)
 
     def __getitem__(self, idx):
         if self.iter % self.refresh_rate == 0: self._create_modules()
-        try:
-            query_data = []
-            supp_data = []
-            problem_threads = []
-            sample_module = self.sampled_modules[np.random.randint(0, len(self.sampled_modules))][1]
+        # try:
+        query_data = []; query_queue = Queue()
+        supp_data = []; supp_queue = Queue()
+        query_processes = []
+        supp_processes = []
 
-            for _ in range(self.query_batch_size):
-                problem_threads.append(Thread(target=self.supportProblem, args=(sample_module, query_data,)))
-                problem_threads[-1].start()
+        sample_module = self.sampled_modules[np.random.randint(0, len(self.sampled_modules))][1]
 
-            for _ in range(self.k_shot):
-                problem_threads.append(Thread(target=self.supportProblem, args=(sample_module, supp_data,)))
-                problem_threads[-1].start()
-            
-            # problem = sample_from_module(sample_module, show_dropped=False)[0]
+        for _ in range(self.query_batch_size):
+            query_processes.append(Process(target=self.getProblem, args=(sample_module, query_queue,)))
+            query_processes[-1].start()
 
-            # support_ques = torch.LongTensor(pd.DataFrame(np_encode_string(str(problem[0]))).fillna(PAD).values.reshape(1, -1))
-            # support_ans = torch.LongTensor(pd.DataFrame(np_encode_string(str(problem[1]))).fillna(PAD).values.reshape(1, -1))
-            
-            for p_t in problem_threads:
-                p_t.join()
+        for _ in range(self.k_shot):
+            supp_processes.append(Process(target=self.getProblem, args=(sample_module, supp_queue,)))
+            supp_processes[-1].start()
+        
+        # problem = sample_from_module(sample_module, show_dropped=False)[0]
 
-            if len(query_data) < self.query_batch_size or len(supp_data) < self.k_shot:
-                return self.__getitem__(0)
+        # support_ques = torch.LongTensor(pd.DataFrame(np_encode_string(str(problem[0]))).fillna(PAD).values.reshape(1, -1))
+        # support_ans = torch.LongTensor(pd.DataFrame(np_encode_string(str(problem[1]))).fillna(PAD).values.reshape(1, -1))
+        
+        for p_t in query_processes:
+            query_data.append(query_queue.get())
+            p_t.join()
 
-            query_ques, query_ans = zip(*query_data)
+        for p_t in supp_processes:
+            supp_data.append(supp_queue.get())
+            p_t.join()
 
-            query_ques = pd.DataFrame(query_ques).fillna(PAD).values.reshape(self.query_batch_size, -1)
-            query_ans = pd.DataFrame(query_ans).fillna(PAD).values.reshape(self.query_batch_size, -1)
-
-            support_ques, support_ans = zip(*supp_data)
-
-            support_ques = pd.DataFrame(support_ques).fillna(PAD).values.reshape(self.k_shot, -1)
-            support_ans = pd.DataFrame(support_ans).fillna(PAD).values.reshape(self.k_shot, -1)
-        except:
+        if len(query_data) < self.query_batch_size or len(supp_data) < self.k_shot:
             return self.__getitem__(0)
+
+        query_ques, query_ans = zip(*query_data)
+
+        query_ques = pd.DataFrame(query_ques).fillna(PAD).values.reshape(self.query_batch_size, -1)
+        query_ans = pd.DataFrame(query_ans).fillna(PAD).values.reshape(self.query_batch_size, -1)
+
+        support_ques, support_ans = zip(*supp_data)
+
+        support_ques = pd.DataFrame(support_ques).fillna(PAD).values.reshape(self.k_shot, -1)
+        support_ans = pd.DataFrame(support_ans).fillna(PAD).values.reshape(self.k_shot, -1)
+        # except:
+            # return self.__getitem__(0)
         
         self.iter += 1
         

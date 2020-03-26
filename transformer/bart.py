@@ -848,7 +848,7 @@ class BartModel(PretrainedBartModel):
         assert isinstance(decoder_outputs[0], torch.Tensor)
 
         if get_value:
-            return self.decoder_proj(decoder_outputs[0]), self.value_proj(decoder_outputs[0])
+            return self.decoder_proj(decoder_outputs[0]), F.relu(self.value_proj(decoder_outputs[0]))
         else:
             return self.decoder_proj(decoder_outputs[0])
 
