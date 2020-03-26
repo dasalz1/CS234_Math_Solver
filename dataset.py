@@ -32,35 +32,37 @@ class GeneratorDataset(Dataset):
     def _create_modules(self, difficulty=0.5):
         initial_modules = modules.train(_make_entropy_fn(difficulty, 1))
         filtered_modules = _filter_and_flatten(self.categories, initial_modules)
+        print(f"filtered modules: {filtered_modules}")
         self.sampled_modules = list(six.iteritems(filtered_modules))
+        print(f"samp: {self.sampled_modules}")
 
     def __getitem__(self, idx, num_probs=-1):
         if self.iter % self.refresh_rate == 0: self._create_modules()
-        try:
-            prob_data = []
-            # problem_threads = []
+        #try:
+        prob_data = []
+        # problem_threads = []
 
-            sample_module = self.sampled_modules[np.random.randint(0, len(self.sampled_modules))][1]
+        sample_module = self.sampled_modules[np.random.randint(0, len(self.sampled_modules))][1]
 
-            num_probs = self.batch_size if num_probs == -1 else num_probs
-            for _ in range(num_probs):
-                self.getProblem(sample_module, prob_data)
-                # problem_threads.append(Thread(target=self.getProblem, args=(sample_module, prob_data,)))
-                # problem_threads[-1].start()
+        num_probs = self.batch_size if num_probs == -1 else num_probs
+        for _ in range(num_probs):
+            self.getProblem(sample_module, prob_data)
+            # problem_threads.append(Thread(target=self.getProblem, args=(sample_module, prob_data,)))
+            # problem_threads[-1].start()
 
-            # for p_t in problem_threads:
-                # p_t.join()
+        # for p_t in problem_threads:
+            # p_t.join()
 
-            if len(prob_data) < num_probs:
-                return self.__getitem__(0)
+        if len(prob_data) < num_probs:
+            return self.__getitem__(0)
 
-            ques, ans = zip(*prob_data)
+        ques, ans = zip(*prob_data)
 
-            ques = pd.DataFrame(ques).fillna(PAD).values.reshape(num_probs, -1)
-            ans = pd.DataFrame(ans).fillna(PAD).values.reshape(num_probs, -1)
+        ques = pd.DataFrame(ques).fillna(PAD).values.reshape(num_probs, -1)
+        ans = pd.DataFrame(ans).fillna(PAD).values.reshape(num_probs, -1)
 
-        except:
-            return self.__getitem__(idx)
+        #except:
+        #    return self.__getitem__(idx)
 
         self.iter += 1
         return ques, ans
