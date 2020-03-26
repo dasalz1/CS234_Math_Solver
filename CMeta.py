@@ -13,10 +13,10 @@ from tqdm import tqdm
 from transformers import AdamW
 
 class Learner(nn.Module):
-  def __init__(self, device, meta_lr=1e-4, checkpoint_path='./checkpoint-mle.pth'):
+  def __init__(self, device, meta_lr=1e-4, checkpoint_path='./checkpoint-mle.pth', num_updates=5):
     super(Learner, self).__init__()
-    self.model = Policy_Network(data_parallel=False, use_gpu=False if gpu is 'cpu' else True)
-    self.model_pi = Policy_Network(data_parallel=False, use_gpu=False if gpu is 'cpu' else True)
+    self.model = Policy_Network(data_parallel=False, use_gpu=False if str(device)=='cpu' else True)
+    self.model_pi = Policy_Network(data_parallel=False, use_gpu=False if str(device)=='cpu' else True)
 
     if checkpoint_path is not '':
       saved_checkpoint = torch.load(checkpoint_path)
@@ -28,6 +28,7 @@ class Learner(nn.Module):
     
     self.meta_optimizer = optim.SGD(self.model.parameters(), meta_lr)
     self.device=device
+    self.num_updates = num_updates
     self.model.to(self.device)
     self.model_pi.to(self.device)
     self.model.train()
@@ -35,13 +36,13 @@ class Learner(nn.Module):
     self.eps = np.finfo(np.float32).eps.item()
 
 
-  def loss_op(self, data, op, num_iter):
+  def loss_op(self, data, op):
     
     support_ques, support_ans, query_ques, query_ans = data
     for copy_param, param in zip(self.model.parameters(), self.model_pi.parameters()):
       param.data.copy_(copy_param.data)
 
-    for i in range(num_updates):
+    for i in range(self.num_updates):
       self.meta_optimizer.zero_grad()
       loss, acc = self.model_pi.loss_op(data=(support_ques, support_ans), op=op)
 
@@ -53,7 +54,7 @@ class Learner(nn.Module):
     return loss, acc
 
   def forward_temp(self, temp_data, op):
-    _, _, dummy_query_x, dummy_query_y = temp_data
+    dummy_query_x, dummy_query_y = temp_data
     dummy_loss, _ = self.model_pi.loss_op(data=(dummy_query_x, dummy_query_y), op=op)#(src_seq=dummy_query_x, trg_seq=dummy_query_y, use_critic=True)
     return dummy_loss
 
@@ -67,7 +68,7 @@ class Learner(nn.Module):
     hooks = self._hook_grads(all_grads)
     dummy_loss.backward()
     torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
-    self.optimizer.step()
+    optimizer.step()
 
     # gpu memory explodes if you dont remove hooks
     for h in hooks:

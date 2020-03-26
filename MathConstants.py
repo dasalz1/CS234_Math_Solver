@@ -8,11 +8,8 @@ full_categories = ['algebra',
     'probability']
 
 algebra_subcategories = ['polynomial_roots',
-            'polynomial_roots_composed',
             'linear_1d',
-            'linear_1d_composed',
             'linear_2d',
-            'linear_2d_composed',
             'sequence_nth_term',
             'sequence_next_term']
 
@@ -26,37 +23,26 @@ arithmetic_subcategories = ['add_or_sub',
             'mixed',
             'nearest_integer_root','simplify_surd']
 
-calculus_subcategories = ['differentiate_composed',  'differentiate']
+calculus_subcategories = ['differentiate']
 
 comparison_subcategories = ['pair',
-            'pair_composed',
             'kth_biggest',
-            'kth_biggest_composed',
             'closest',
-            'closest_composed',
-            'sort',
-            'sort_composed']
+            'sort',]
 
 measurement_categories = ['conversion', 'time']
 
 numbers_categories = ['gcd',
-            'gcd_composed'
             'lcm',
             'div_remainder',
-            #'div_remainder_composed'
             'is_prime',
             'is_factor',
-            #'is_factor_composed',
             'round_number',
-            #'round_number_composed',
             'place_value',
-            #'place_value_composed',
-            'list_prime_factors', 
-            'list_prime_factors_composed']
+            'list_prime_factors', ]
 
 polynomials_categories = ['coefficient_named',
             'evaluate',
-            'evaluate_composed',
             'add',
             'expand',
             'collect',
