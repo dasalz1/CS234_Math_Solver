@@ -43,14 +43,14 @@ numbers_categories = ['gcd',
             'gcd_composed'
             'lcm',
             'div_remainder',
-            'div_remainder_composed'
+            #'div_remainder_composed'
             'is_prime',
             'is_factor',
-            'is_factor_composed',
+            #'is_factor_composed',
             'round_number',
-            'round_number_composed',
+            #'round_number_composed',
             'place_value',
-            'place_value_composed',
+            #'place_value_composed',
             'list_prime_factors', 
             'list_prime_factors_composed']
 
