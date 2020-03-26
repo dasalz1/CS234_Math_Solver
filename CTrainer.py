@@ -94,7 +94,7 @@ class TeacherTrainer:
 
 	def create_labels(self, tasks, valid_grads, category_acc, accs, losses, task_counts, iter_acc, iter_loss, num_categories, data_loader=None):
 		valid_losses = [0.0]*num_categories
-		unique_tasks = np.unique(tasks); num_tasks = len(unique_tasks)
+		unique_tasks = np.unique(tasks.cpu().numpy()); num_tasks = len(unique_tasks)
 		for task in unique_tasks:
 			if 'meta' in self.op:
 				# accumulate validation gradients and metrics from task for loop
