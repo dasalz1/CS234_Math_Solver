@@ -36,8 +36,8 @@ def validate(model, batch_idx, mode = 'training', samples_per_category = 1024, u
 
     if use_mle and not use_rl:
         loss_by_category = []
-        n_char_by_category = []
         n_correct_by_category = []
+        n_char_by_category = []
         for category_index in len(categories):
             loss, n_correct, n_char = Trainer.mle_batch_loss(batch_qs[category_index], batch_as[category_index],
                                                              model.action_transformer)
@@ -50,26 +50,36 @@ def validate(model, batch_idx, mode = 'training', samples_per_category = 1024, u
 
         if tensorboard is not None:
             tb_mle_batch(tensorboard, average_loss, average_n_char, average_n_correct, batch_idx)
+        return {
+            'loss_by_category': loss_by_category,
+            'n_correct_by_category': n_correct_by_category,
+            'n_char_by_category': n_char_by_category
+        }
 
     elif use_rl and not use_mle:
+        value_loss_by_category = []
         loss_by_category = []
-        reward_by_category = []
+        batch_rewards_by_category = []
         for category_index in len(categories):
-            policy_losses, value_losses, batch_rewards = Trainer.policy_batch_loss(batch_qs, batch_as, model, gamma=0.9)
+            policy_losses, value_losses, batch_rewards = Trainer.policy_batch_loss(batch_qs[category_index],
+                                                                                   batch_as[category_index],
+                                                                                   model, gamma=0.9)
             loss = np.mean(policy_losses + value_losses)
+            value_loss_by_category.append(np.mean(value_losses))
             loss_by_category.append(loss)
-            reward_by_category.append(np.mean(batch_rewards))
-        average_loss = np.mean(loss_by_category)
-        average_reward = np.mean(reward_by_category)
+            batch_rewards_by_category.append(batch_rewards)
+        average_value_loss = np.mean(value_loss_by_category)
+        average_batch_rewards = np.mean(batch_rewards_by_category, axis=0)
         if tensorboard is not None:
-            tb_policy_batch(tensorboard, batch_rewards, value_losses, 0, 0, num_datapoints, batch_idx)
+            tb_policy_batch(tensorboard, average_batch_rewards, average_value_loss, batch_idx)
+        return {
+            'loss_by_category': loss_by_category,
+            'value_loss_by_category': value_loss_by_category,
+            'batch_rewards_by_category': batch_rewards_by_category,
+        }
 
-    return
-
-    '''
-    
-    '''
-
+    else:
+        raise Exception("Validation must be run with either MLE or RL model.")
 
 def meta_validate():
     pass
