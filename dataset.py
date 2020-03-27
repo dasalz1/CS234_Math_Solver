@@ -54,8 +54,8 @@ class GeneratorDataset(Dataset):
 
             ques, ans = zip(*prob_data)
 
-            ques = pd.DataFrame(ques).fillna(PAD).values.reshape(num_probs, -1)
-            ans = pd.DataFrame(ans).fillna(PAD).values.reshape(num_probs, -1)
+            ques = pd.DataFrame(ques).fillna(PAD)#.values.reshape(num_probs, -1)
+            ans = pd.DataFrame(ans).fillna(PAD)#.values.reshape(num_probs, -1)
 
         except:
             return self.__getitem__(idx)
