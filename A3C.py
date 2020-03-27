@@ -50,7 +50,7 @@ class Policy_Network(nn.Module):
     def loss_op(self, data, op, tb=None, num_iter=None, valid_data=None):
         batch_qs, batch_as = data
         if 'rl' in op:
-            policy_losses, value_losses, batch_rewards = self.policy_batch_loss(batch_qs, batch_as, 0.9)
+            policy_losses, value_losses, batch_rewards = Policy_Network.policy_batch_loss(self, batch_qs, batch_as, 0.9, device=self.device)
 
             return policy_losses+value_losses, batch_rewards
         elif 'mle' in op:
@@ -69,7 +69,8 @@ class Policy_Network(nn.Module):
             # action_prob = action_prob[:, -1, :]
             return action_prob
 
-    def calc_reward(self, actions_pred, actions, ignore_index=0, sparse_rewards=False):
+    @staticmethod
+    def calc_reward(actions_pred, actions, ignore_index=0, sparse_rewards=False):
         # sparse rewards or char rewards
         if sparse_rewards:
             if actions_pred == EOS and actions == EOS:
@@ -79,17 +80,18 @@ class Policy_Network(nn.Module):
             # 1 if character is correct
             return (actions_pred==actions).float()
 
-    def get_returns(self, rewards, batch_size, gamma):
+    @staticmethod
+    def get_returns(rewards, batch_size, gamma, device='cpu'):
         T = rewards.shape[1]
         # discounts = torch.tensor(np.logspace(0, T, T, base=gamma, endpoint=False)).view(1, -1).to(self.device)
-        discounts = torch.FloatTensor(np.logspace(0, T, T, base=gamma, endpoint=False).reshape(1, -1)).to(self.device)
+        discounts = torch.FloatTensor(np.logspace(0, T, T, base=gamma, endpoint=False).reshape(1, -1)).to(device)
         all_returns = torch.zeros((batch_size, T))
         # rewards = rewards.numpy()
         for t in range(T):
             temp = torch.sum(discounts[:, :T-t]*rewards[:, t:], -1)
             all_returns[:, t] = temp
 
-        all_returns = torch.FloatTensor(all_returns).to(self.device)
+        all_returns = torch.FloatTensor(all_returns).to(device)
         all_returns = (all_returns - all_returns.mean(dim=-1).view(-1, 1)) / (all_returns.std(dim=-1).view(-1, 1) + np.finfo(np.float32).eps.item())
         return all_returns
 
@@ -135,17 +137,18 @@ class Policy_Network(nn.Module):
 
         return loss, n_correct, n_char
 
-    def policy_batch_loss(self, batch_qs, batch_as, gamma):
+    @staticmethod
+    def policy_batch_loss(model, batch_qs, batch_as, gamma, device='cpu'):
         batch_size, max_len_sequence = batch_qs.shape[0], batch_as.shape[1]
         current_as = batch_as[:, :1]
-        complete = torch.ones((batch_size, 1)).to(self.device)
-        rewards = torch.zeros((batch_size, 0)).to(self.device)
-        values = torch.zeros((batch_size, 0)).to(self.device)
-        log_probs = torch.zeros((batch_size, 0)).to(self.device)
-        advantages_mask = torch.ones((batch_size, 0)).to(self.device)
+        complete = torch.ones((batch_size, 1)).to(device)
+        rewards = torch.zeros((batch_size, 0)).to(device)
+        values = torch.zeros((batch_size, 0)).to(device)
+        log_probs = torch.zeros((batch_size, 0)).to(device)
+        advantages_mask = torch.ones((batch_size, 0)).to(device)
         for t in range(1, max_len_sequence):
             advantages_mask = torch.cat((advantages_mask, complete), dim=1)
-            action_probs, curr_values = self.forward(src_seq=batch_qs, trg_seq=current_as, op='rl')
+            action_probs, curr_values = model.forward(src_seq=batch_qs, trg_seq=current_as, op='rl')
             # print(F.softmax(action_probs, dim=-1))
             m = Categorical(F.softmax(action_probs, dim=-1))
             actions = m.sample().reshape(-1, 1)
@@ -156,17 +159,17 @@ class Policy_Network(nn.Module):
             current_as = torch.cat((current_as, actions), dim=1)
             curr_log_probs = m.log_prob(actions.contiguous().view(-1)).contiguous().view(-1, 1)
             # calculate reward based on character cross entropy
-            curr_rewards = self.calc_reward(actions, trg_t)
+            curr_rewards = Policy_Network.calc_reward(actions, trg_t)
 
             # update terms
-            rewards = torch.cat((rewards, curr_rewards), dim=1).to(self.device)
-            values = torch.cat((values, curr_values), dim=1).to(self.device)
+            rewards = torch.cat((rewards, curr_rewards), dim=1).to(device)
+            values = torch.cat((values, curr_values), dim=1).to(device)
             log_probs = torch.cat((log_probs, curr_log_probs), dim=1)
 
             # if the action taken is EOS or if end of sequence trajectory ends
             complete *= (1 - ((actions==EOS) | (trg_t==EOS)).float())
         
-        returns = self.get_returns(rewards, batch_size, gamma)
+        returns = Policy_Network.get_returns(rewards, batch_size, gamma)
         # print(values)
         advantages = returns - values
         # advantages = returns

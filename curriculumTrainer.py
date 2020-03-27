@@ -178,7 +178,7 @@ class CurriculumTrainer():
                 student_optimizer.zero_grad()
 
                 if not self.use_mle:
-                    policy_losses, batch_rewards = self.policy_batch_loss(batch_qs, batch_as, model, gamma=0.9)
+                    policy_losses, batch_rewards = self.policy_batch_loss(batch_qs, batch_as, model, gamma=0.9, device=self.device)
                 if not self.use_rl:
                     mle_loss, num_correct, num_chars = self.mle_batch_loss(batch_qs, batch_as, student_model.action_transformer)
 
