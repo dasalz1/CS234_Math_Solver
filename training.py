@@ -72,7 +72,8 @@ class Trainer:
   
     return all_returns
 
-  def compute_mle_loss(self, pred, target, smoothing, log=False):
+  @staticmethod
+  def compute_mle_loss(pred, target, smoothing, log=False):
     def compute_loss(pred, target, smoothing):
       target = target.contiguous().view(-1)
       if smoothing:
@@ -127,7 +128,7 @@ class Trainer:
 
         if not self.use_mle:
           # policy_losses, value_losses, batch_rewards = self.policy_batch_loss(batch_qs, batch_as, model, gamma=0.9)
-          policy_losses, value_losses, batch_rewards = self.policy_batch_loss(batch_qs, batch_as, model, gamma=0.9)
+          policy_losses, value_losses, batch_rewards = self.policy_batch_loss(batch_qs, batch_as, model, gamma=0.9, device=self.device)
 
         if not self.use_rl:
           mle_loss, n_correct, n_char = self.mle_batch_loss(batch_qs, batch_as, model.action_transformer)
@@ -191,25 +192,27 @@ class Trainer:
           tb_mle_policy_epoch(tb, loss_per_char, accuracy, average_rewards, average_value_loss, epoch)
           # self.tb_mle_policy_epoch(tb, loss_per_char, accuracy, average_rewards, epoch)
 
-  def mle_batch_loss(self, batch_qs, batch_as, model):
+  @staticmethod
+  def mle_batch_loss(batch_qs, batch_as, model):
     trg_as = batch_as[:, 1:]
     pred_logits = model(input_ids=batch_qs, decoder_input_ids=batch_as[:, :-1])
     pred_logits = pred_logits.reshape(-1, pred_logits.size(2))
-    loss, n_correct = self.compute_mle_loss(pred_logits, trg_as, smoothing=True)
+    loss, n_correct = Trainer.compute_mle_loss(pred_logits, trg_as, smoothing=True)
     
     non_pad_mask = trg_as.ne(PAD)
     n_char = non_pad_mask.sum().item()
 
     return loss, n_correct, n_char
 
-  def policy_batch_loss(self, batch_qs, batch_as, model, gamma):
+  @staticmethod
+  def policy_batch_loss(batch_qs, batch_as, model, gamma, device='cpu'):
     batch_size, max_len_sequence = batch_qs.shape[0], batch_as.shape[1]
     current_as = batch_as[:, :1]
-    complete = torch.ones((batch_size, 1)).to(self.device)
-    rewards = torch.zeros((batch_size, 0)).to(self.device)
-    values = torch.zeros((batch_size, 0)).to(self.device)
-    log_probs = torch.zeros((batch_size, 0)).to(self.device)
-    advantages_mask = torch.ones((batch_size, 0)).to(self.device)
+    complete = torch.ones((batch_size, 1)).to(device)
+    rewards = torch.zeros((batch_size, 0)).to(device)
+    values = torch.zeros((batch_size, 0)).to(device)
+    log_probs = torch.zeros((batch_size, 0)).to(device)
+    advantages_mask = torch.ones((batch_size, 0)).to(device)
     for t in range(1, max_len_sequence):
       advantages_mask = torch.cat((advantages_mask, complete), dim=1)
       # action_probs, curr_values = model(src_seq=batch_qs, trg_seq=current_as)
@@ -226,8 +229,8 @@ class Trainer:
       curr_rewards = self.calc_reward(actions, trg_t)
       
       # update terms
-      rewards = torch.cat((rewards, curr_rewards), dim=1).to(self.device)
-      values = torch.cat((values, curr_values), dim=1).to(self.device)
+      rewards = torch.cat((rewards, curr_rewards), dim=1).to(device)
+      values = torch.cat((values, curr_values), dim=1).to(device)
       log_probs = torch.cat((log_probs, curr_log_probs), dim=1)
       
       # if the action taken is EOS or if end of sequence trajectory ends

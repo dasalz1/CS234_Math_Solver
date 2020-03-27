@@ -4,8 +4,7 @@ import datetime
             
 from tensorboard.backend.event_processing import event_accumulator
 
-
-def tb_mle_batch(self, tb, total_loss, n_char_total, n_char_correct, batch_idx):
+def tb_mle_batch(tb, total_loss, n_char_total, n_char_correct, batch_idx):
     tb.add_scalars(
         {
         "loss_per_char" : total_loss / n_char_total,
@@ -26,7 +25,7 @@ def tb_mle_batch(self, tb, total_loss, n_char_total, n_char_correct, batch_idx):
 #         global_step=epoch
 #     )
 
-def tb_policy_batch(self, tb, batch_rewards, average_value_loss, batch_idx):
+def tb_policy_batch(tb, batch_rewards, average_value_loss, batch_idx):
     tb.add_scalars(
       {
         "batch_average_rewards" : batch_rewards,

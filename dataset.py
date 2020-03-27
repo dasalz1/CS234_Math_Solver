@@ -32,9 +32,7 @@ class GeneratorDataset(Dataset):
     def _create_modules(self, difficulty=0.5):
         initial_modules = modules.train(_make_entropy_fn(difficulty, 1))
         filtered_modules = _filter_and_flatten(self.categories, initial_modules)
-        print(f"filtered modules: {filtered_modules}")
         self.sampled_modules = list(six.iteritems(filtered_modules))
-        print(f"samp: {self.sampled_modules}")
 
     def __getitem__(self, idx, num_probs=-1):
         if self.iter % self.refresh_rate == 0: self._create_modules()

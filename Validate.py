@@ -3,17 +3,15 @@ from torch.utils import data
 from training import Trainer
 import torch
 import numpy as np
-from tensorboard_utils import tb_mle_batch, tb_policy_batch
+import tensorboard_utils
+from A3C import Policy_Network
 
 category_mappings = {
     'training': ['algebra', 'arithmetic', 'probability', 'numbers'],
     'induction': ['polynomials', 'calculus', 'measurement', 'comparison']
 }
 
-@staticmethod
-def validate(model, batch_idx, mode = 'training', samples_per_category = 1024, use_mle=True, use_rl = False, tensorboard = None):
-    torch.seed(1111)
-    np.seed(1111)
+def validate(model, batch_idx, mode = 'training', samples_per_category = 16, use_mle=True, use_rl = False, tensorboard = None):
     if mode not in category_mappings:
         mode = 'training'
         print("Mode not found in category mappings; reverting to default categories.")
@@ -25,31 +23,34 @@ def validate(model, batch_idx, mode = 'training', samples_per_category = 1024, u
         for category_index in range(len(categories))]
     validation_loaders = [
         data.DataLoader(validation_datasets[category_index], batch_size=samples_per_category,
-                        shuffle=True, collate_fn=batch_collate_fn)
+                        shuffle=True)
         for category_index in range(len(categories))]
     validation_batches = [
-        validation_loader[0]
+        next(iter(validation_loader))
         for validation_loader in validation_loaders]
-    batch_qs, batch_as = [
-        map(lambda x: x, validation_batch)
-        for validation_batch in validation_batches]
+
+    batch_qs = [torch.squeeze(validation_batch[0]).long() for validation_batch in validation_batches]
+    batch_as = [torch.squeeze(validation_batch[1]).long() for validation_batch in validation_batches]
 
     if use_mle and not use_rl:
         loss_by_category = []
         n_correct_by_category = []
         n_char_by_category = []
-        for category_index in len(categories):
-            loss, n_correct, n_char = Trainer.mle_batch_loss(batch_qs[category_index], batch_as[category_index],
-                                                             model.action_transformer)
-            loss_by_category.append(loss)
+        for category_index in range(len(categories)):
+            loss, n_correct, n_char = Trainer.mle_batch_loss(batch_qs[category_index], batch_as[category_index], model.action_transformer)
+            loss_by_category.append(loss.item())
             n_correct_by_category.append(n_correct)
             n_char_by_category.append(n_char)
+
+        #print(f"lbc: {loss_by_category}")
+        #print(f"ncbc: {n_correct_by_category}")
+        #print(f"ntbc: {n_char_by_category}")
         average_loss = np.mean(loss_by_category)
         average_n_correct = np.mean(n_correct_by_category)
         average_n_char = np.mean(n_char_by_category)
 
         if tensorboard is not None:
-            tb_mle_batch(tensorboard, average_loss, average_n_char, average_n_correct, batch_idx)
+            tensorboard_utils.tb_mle_batch(tensorboard, average_loss, average_n_char, average_n_correct, batch_idx)
         return {
             'loss_by_category': loss_by_category,
             'n_correct_by_category': n_correct_by_category,
@@ -59,23 +60,24 @@ def validate(model, batch_idx, mode = 'training', samples_per_category = 1024, u
     elif use_rl and not use_mle:
         value_loss_by_category = []
         loss_by_category = []
-        batch_rewards_by_category = []
-        for category_index in len(categories):
-            policy_losses, value_losses, batch_rewards = Trainer.policy_batch_loss(batch_qs[category_index],
+        batch_reward_by_category = []
+        for category_index in range(len(categories)):
+            policy_loss, value_loss, batch_reward = Policy_Network.policy_batch_loss(model,
+                                                                                   batch_qs[category_index],
                                                                                    batch_as[category_index],
-                                                                                   model, gamma=0.9)
-            loss = np.mean(policy_losses + value_losses)
-            value_loss_by_category.append(np.mean(value_losses))
+                                                                                   gamma=0.9)
+            loss = (policy_loss + value_loss).item()
+            value_loss_by_category.append(value_loss.item())
             loss_by_category.append(loss)
-            batch_rewards_by_category.append(batch_rewards)
+            batch_reward_by_category.append(batch_reward)
         average_value_loss = np.mean(value_loss_by_category)
-        average_batch_rewards = np.mean(batch_rewards_by_category, axis=0)
+        average_batch_rewards = np.mean(batch_reward_by_category, axis=0)
         if tensorboard is not None:
-            tb_policy_batch(tensorboard, average_batch_rewards, average_value_loss, batch_idx)
+            tensorboard_utils.tb_policy_batch(tensorboard, average_batch_rewards, average_value_loss, batch_idx)
         return {
             'loss_by_category': loss_by_category,
             'value_loss_by_category': value_loss_by_category,
-            'batch_rewards_by_category': batch_rewards_by_category,
+            'batch_reward_by_category': batch_reward_by_category,
         }
 
     else:
@@ -83,4 +85,5 @@ def validate(model, batch_idx, mode = 'training', samples_per_category = 1024, u
 
 def meta_validate():
     pass
+    # To be implemented
 

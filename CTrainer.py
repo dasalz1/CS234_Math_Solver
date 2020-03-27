@@ -7,13 +7,14 @@ from torch import autograd
 from torch.distributions.categorical import Categorical
 from tqdm import tqdm
 import numpy as np
+import Validate
 
 class TeacherTrainer:
 
-	def __init__(self, op='mle', device='cpu', teacher_network=True, teacher_model=None, student_model=None, student_optimizer=None, teacher_lr=0.1, validation_samples=1, tb=None):
+	def __init__(self, op='mle', device='cpu', teacher_network=True, teacher_model=None, student_model=None, student_optimizer=None, teacher_lr=0.1, validation_samples=1, train_categories = ['algebra', 'arithmetic', 'probability', 'numbers'], tb=None):
 		self.op = op
 		self.device = device
-
+		self.train_categories = train_categories
 
 		self.teacher_model = teacher_model
 		# Teacher is either parametrized by a neural network or just the raw parameters of the Multinomial distribution
@@ -30,9 +31,26 @@ class TeacherTrainer:
 		self.tb = tb
 		self.validation_samples = validation_samples
  
-	def train_teacher(self, data_loader=None, K=10, task_batch_size=10, num_categories=1, num_iterations=100000):
+	def train_teacher(self, data_loader=None, K=10, task_batch_size=10, num_categories=1, num_iterations=100000, validation_interval = 500):
 		category_acc = [0.0]*num_categories
 		for num_idx in tqdm(range(num_iterations), mininterval=2, leave=False):
+			## Validation script begins
+			if num_idx % validation_interval == 0:# and num_idx != 0:
+				val_results = Validate.validate(self.student_model, num_idx, mode='training', use_mle=(True if self.op=='mle' else False),
+							  use_rl=(True if self.op=='rl' else False), tensorboard=self.tb)
+				if self.op == 'mle':
+					val_loss_string, val_acc_string = "", ""
+					for category_idx, category in enumerate(self.train_categories):
+						val_loss_string += f"{category}: {val_results['loss_by_category'][category_idx]}, "
+						val_acc_string += f"{category}: {val_results['n_correct_by_category'][category_idx] / val_results['n_char_by_category'][category_idx]}, "
+					print(f"Batch-averaged losses:\n{val_loss_string[:-2]}\nBatch-averaged accuracies:\n{val_acc_string[:-2]}")
+				if self.op == 'rl':
+					val_loss_string, val_rew_string = "", ""
+					for category_idx, category in enumerate(self.train_categories):
+						val_loss_string += f"{category}: {val_results['loss_by_category'][category_idx]}, "
+						val_rew_string += f"{category}: {val_results['batch_reward_by_category'][category_idx]}, "
+					print(f"Batch-averaged losses:\n{val_loss_string[:-2]}\nBatch-averaged accuracies:\n{val_rew_string[:-2]}")
+			## Validation script ends
 
 			if self.teacher_model:
 				category_probs = self.teacher_model(torch.FloatTensor(category_acc).contiguous().view(1, -1).to(self.device)).contiguous().view(-1)
