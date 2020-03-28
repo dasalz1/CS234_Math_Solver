@@ -11,7 +11,7 @@ def tb_mle_batch(tb, total_loss, n_char_total, n_char_correct, batch_idx):
         "accuracy": n_char_correct / n_char_total,
         },
         group="mle_train",
-        sub_group="batch",
+        sub_group="validate",
         global_step = batch_idx)
 
 # def tb_mle_epoch(self, tb, loss_per_char, accuracy, epoch):
