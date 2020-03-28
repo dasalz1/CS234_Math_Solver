@@ -38,18 +38,19 @@ class TeacherTrainer:
 			if num_idx % validation_interval == 0:# and num_idx != 0:
 				val_results = Validate.validate(self.student_model, num_idx, mode='training', use_mle=(True if self.op=='mle' else False),
 							  use_rl=(True if self.op=='rl' else False), tensorboard=self.tb)
+				print(f"Validation results for iteration {num_idx}:")
 				if self.op == 'mle':
 					val_loss_string, val_acc_string = "", ""
 					for category_idx, category in enumerate(self.train_categories):
 						val_loss_string += f"{category}: {val_results['loss_by_category'][category_idx]}, "
 						val_acc_string += f"{category}: {val_results['n_correct_by_category'][category_idx] / val_results['n_char_by_category'][category_idx]}, "
-					print(f"Batch-averaged losses:\n{val_loss_string[:-2]}\nBatch-averaged accuracies:\n{val_acc_string[:-2]}")
+					print(f"Batch-averaged losses:\n{val_loss_string[:-2]}\nBatch-averaged accuracies:\n{val_acc_string[:-2]}\n")
 				if self.op == 'rl':
 					val_loss_string, val_rew_string = "", ""
 					for category_idx, category in enumerate(self.train_categories):
 						val_loss_string += f"{category}: {val_results['loss_by_category'][category_idx]}, "
 						val_rew_string += f"{category}: {val_results['batch_reward_by_category'][category_idx]}, "
-					print(f"Batch-averaged losses:\n{val_loss_string[:-2]}\nBatch-averaged accuracies:\n{val_rew_string[:-2]}")
+					print(f"Batch-averaged losses:\n{val_loss_string[:-2]}\nBatch-averaged accuracies:\n{val_rew_string[:-2]}\n")
 			## Validation script ends
 
 			if self.teacher_model:
