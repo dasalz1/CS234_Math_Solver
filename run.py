@@ -8,6 +8,7 @@ import torch.optim as optim
 import torch
 import numpy as np
 import random
+from dataset import NaïveCurriculumDataset
 
 from tensorboard_utils import Tensorboard
 from tensorboard_utils import tensorboard_event_accumulator
@@ -40,33 +41,37 @@ if __name__ == '__main__':
     exp_name = "math_ds_full_rl"
   else:
     exp_name = "math_ds_full_mle_rl"
-  unique_id = "char_rewards-1-2020-11-03_random_seed_24"
+  unique_id = "char_rewards-2020-12-03_random_seed_1_larger_bs"
   tb = Tensorboard(exp_name, unique_name=unique_id)
 
   categories = mdsmgr.get_categories()
   types = mdsmgr.get_types()
 
-  batch_size = 1024
-  checkpoint_interval = 10000
-  epochs = 20
   if args.use_mle_only:
-    collate_fn = question_answer_to_batch_collate_fn
+    batch_size = 128
+    checkpoint_interval = 10000
+    epochs = 20
+    # collate_fn = question_answer_to_batch_collate_fn
+    num_iterations = 100000
     # full dataset
-    ds = mdsmgr.build_dataset_from_categories_and_types(categories, types)
+    # ds = mdsmgr.build_dataset_from_categories_and_types(categories, types)
     # toy dataset (smaller version)
     # ds = mdsmgr.build_dataset_from_module('algebra', 'linear_1d', 'train-hard')
+    # generator dataset
+    collate_fn = batch_collate_fn
+    ds = GeneratorDataset(categories=["algebra", "arithmetic", "comparison", "numbers"], num_iterations=num_iterations, batch_size=batch_size)
   else:
     # generator dataset
     batch_size = 1
     num_iterations = 1
-    checkpoint_interval = 1000
+    checkpoint_interval = 100
     epochs = 1000000
     collate_fn = batch_collate_fn
-    ds = GeneratorDataset(categories=["algebra", "probability"], num_iterations=num_iterations, batch_size=batch_size)
+    ds = GeneratorDataset(categories=["algebra", "arithmetic", "comparison", "numbers"], num_iterations=num_iterations, batch_size=batch_size)
 
   train_loader = data.DataLoader(
       ds, batch_size=batch_size, shuffle=True,#num_workers=4,
-      collate_fn=collate_fn, num_workers=len(CUDA_VISIBLE_DEVICES))
+      collate_fn=collate_fn, num_workers=3)
 
   num_iterations = len(train_loader)
 
@@ -74,6 +79,7 @@ if __name__ == '__main__':
   if not args.use_mle_only:
     num_iterations = num_iterations * epochs
   print("Number of iterations set: {}".format(num_iterations))
+  print("Batch size: {}".format(batch_size))
   
   model = Policy_Network().to(device)
   trainer = Trainer(args.use_mle_only, args.use_rl_only, device)

@@ -810,6 +810,7 @@ class BartModel(PretrainedBartModel):
         self.decoder = BartDecoder(config, self.shared)
 
         self.decoder_proj = nn.Linear(config.d_model, config.vocab_size, bias=True)
+        self.value_proj = nn.Linear(config.d_model, 1, bias=True)
 
         self.init_weights()
 
@@ -822,6 +823,7 @@ class BartModel(PretrainedBartModel):
         encoder_outputs=None,  # type: Tuple
         decoder_attention_mask=None,
         decoder_cached_states=None,
+        get_value=False
     ):
 
         # make masks if user doesn't supply
@@ -844,7 +846,11 @@ class BartModel(PretrainedBartModel):
         # Attention and hidden_states will be [] or None if they aren't needed
         decoder_outputs = _filter_out_falsey_values(decoder_outputs)  # type: tuple
         assert isinstance(decoder_outputs[0], torch.Tensor)
-        return self.decoder_proj(decoder_outputs[0])
+
+        if get_value:
+            return self.decoder_proj(decoder_outputs[0]), F.relu(self.value_proj(decoder_outputs[0]))
+        else:
+            return self.decoder_proj(decoder_outputs[0])
 
     def get_input_embeddings(self):
         return self.shared
