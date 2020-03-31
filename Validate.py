@@ -11,6 +11,7 @@ category_mappings = {
     'induction': ['polynomials', 'calculus', 'measurement', 'comparison']
 }
 
+
 def validate(model, batch_idx, mode = 'training', samples_per_category = 16, use_mle=True, use_rl = False, tensorboard = None):
     if mode not in category_mappings:
         mode = 'training'
@@ -21,16 +22,28 @@ def validate(model, batch_idx, mode = 'training', samples_per_category = 16, use
         GeneratorDataset(categories = [categories[category_index]],
                          num_iterations=1, batch_size = samples_per_category)
         for category_index in range(len(categories))]
+
+    # Retired in favor of np.DataFrame
+    '''
     validation_loaders = [
         data.DataLoader(validation_datasets[category_index], batch_size=samples_per_category,
                         shuffle=True)
         for category_index in range(len(categories))]
+    
     validation_batches = [
         next(iter(validation_loader))
         for validation_loader in validation_loaders]
-
+    
     batch_qs = [torch.squeeze(validation_batch[0]).long() for validation_batch in validation_batches]
-    batch_as = [torch.squeeze(validation_batch[1]).long() for validation_batch in validation_batches]
+    batch_as = [torch.squeeze(validation_batch[1]).long() for validation_batch in validation_batches]'''
+
+    validation_batches = [
+        list(map(lambda x: torch.LongTensor(x.values), validation_dataset.get_sample()))
+        for validation_dataset in validation_datasets
+    ]
+
+    batch_qs = [validation_batch[0] for validation_batch in validation_batches]
+    batch_as = [validation_batch[1] for validation_batch in validation_batches]
 
     if use_mle and not use_rl:
         loss_by_category = []
