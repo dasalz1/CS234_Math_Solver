@@ -26,7 +26,7 @@ class Learner(nn.Module):
         model_dict[kn] = v
         del model_dict[k]
     
-    self.meta_optimizer = optim.SGD(self.model.parameters(), meta_lr)
+    self.meta_optimizer = optim.SGD(self.model_pi.parameters(), meta_lr)
     self.device=device
     self.num_updates = num_updates
     self.model.to(self.device)
@@ -55,7 +55,7 @@ class Learner(nn.Module):
 
   def forward_temp(self, temp_data, op):
     dummy_query_x, dummy_query_y = temp_data
-    dummy_loss, _ = self.model_pi.loss_op(data=(dummy_query_x, dummy_query_y), op=op)#(src_seq=dummy_query_x, trg_seq=dummy_query_y, use_critic=True)
+    dummy_loss, _ = self.model.loss_op(data=(dummy_query_x, dummy_query_y), op=op)#(src_seq=dummy_query_x, trg_seq=dummy_query_y, use_critic=True)
     return dummy_loss
 
   def write_grads(self, sum_grads, optimizer, dummy_data, op):
