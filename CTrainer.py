@@ -7,6 +7,8 @@ from torch import autograd
 from torch.distributions.categorical import Categorical
 from tqdm import tqdm
 import numpy as np
+import pandas as pd
+from transformer.Constants import PAD
 import Validate
 
 class TeacherTrainer:
@@ -66,27 +68,35 @@ class TeacherTrainer:
 			valid_grads = [0.0]*num_categories
 			accs = [[] for _ in range(num_categories)]
 			losses = [[] for _ in range(num_categories)]
-			sum_grads = None
+			sum_grads = None; all_data = None
 			task_counts = [0]*num_categories
 			iter_acc = []; iter_loss = []
 
 			for task in tasks:
-				data = map(lambda x: torch.LongTensor(x).to(self.device), data_loader[task].get_sample())
+				# data = map(lambda x: torch.LongTensor(x).to(self.device), data_loader[task].get_sample())
 				task_counts[task] += 1
-				loss, acc = self.student_model.loss_op(data=data, op=self.op)
+				
 				# if meta model accumulate all gradients here for final optimization and store validation values here since query is in essence query
 				if 'meta' in self.op:
+					data = map(lambda x: torch.LongTensor(x).to(self.device), data_loader[task].get_sample())
+					loss, acc = self.student_model.loss_op(data=data, op=self.op)
 					curr_grads = autograd.grad(loss, self.student_model.parameters(), create_graph=True, allow_unused=True)
 					sum_grads = [torch.add(i, j) for i, j in zip(sum_grads, curr_grads) if (j is not None and i is not None)] if sum_grads is not None else curr_grads
 					valid_grads[task] = [torch.add(i, j) for i, j in zip(valid_grads[task], curr_grads) if (j is not None and i is not None)] if valid_grads[task] is not 0.0 else curr_grads
 					accs[task].append(acc); losses[task].append(loss.item())
 					iter_loss.append(loss.item()); iter_acc.append(acc)
+				else:
+					x, y = data_loader[task].get_sample()
+					# x, y = data
+					# .fillna(PAD).values.
+					all_data = (pd.concat([all_data[0], x], axis=0).fillna(PAD), pd.concat([all_data[1], y], axis=0).fillna(PAD)) if all_data else (x, y)
+					# torch.cat((all_data, x), dim=1)
 
 				# regular optimization step
-				else:
-					self.student_optimizer.zero_grad()
-					loss.backward()
-					self.student_optimizer.step()
+				# else:
+					# self.student_optimizer.zero_grad()
+					# loss.backward()
+					# self.student_optimizer.step()
 
 			if 'meta' in self.op:
 				# average gradients and apply meta gradients
@@ -96,6 +106,12 @@ class TeacherTrainer:
 				data = map(lambda x: torch.LongTensor(x).to(self.device), data_loader[task].get_sample())
 				_, _, dummy_x, dummy_y = data
 				self.student_model.write_grads(sum_grads, self.student_optimizer, (dummy_x, dummy_y), self.op)
+			else:
+				all_data = map(lambda x: torch.LongTensor(x.values).to(self.device), all_data)
+				loss, acc = self.student_model.loss_op(data=all_data, op=self.op)
+				self.student_optimizer.zero_grad()
+				loss.backward()
+				self.student_optimizer.step()
 
 			valid_grads, valid_losses, avg_acc, avg_loss = self.create_labels(tasks, valid_grads, category_acc, 
 									accs, losses, task_counts, iter_acc, iter_loss, num_categories, data_loader)
@@ -122,7 +138,7 @@ class TeacherTrainer:
 				loss = np.mean(losses[task])
 			else:
 				# create, process and accumulate validation gradients and metrics for tasks sampled in for loop
-				valid_data = map(lambda x: torch.LongTensor(x).to(self.device), data_loader[task].get_valid_sample(self.validation_samples))
+				valid_data = map(lambda x: torch.LongTensor(x.values).to(self.device), data_loader[task].get_valid_sample(self.validation_samples))
 				loss, acc = self.student_model.loss_op(valid_data, self.op)
 				category_acc[task] = category_acc[task]/2 + acc/2
 				grads = autograd.grad(loss, self.student_model.parameters(), create_graph=True, allow_unused=True)
