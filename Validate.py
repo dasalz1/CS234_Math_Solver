@@ -11,8 +11,7 @@ category_mappings = {
     'induction': ['polynomials', 'calculus', 'measurement', 'comparison']
 }
 
-
-def validate(model, batch_idx, mode = 'training', samples_per_category = 16, use_mle=True, use_rl = False, tensorboard = None):
+def validate(model, batch_idx, category_names, mode = 'training', samples_per_category = 16, use_mle=True, use_rl = False, tensorboard = None):
     if mode not in category_mappings:
         mode = 'training'
         print("Mode not found in category mappings; reverting to default categories.")
@@ -64,6 +63,14 @@ def validate(model, batch_idx, mode = 'training', samples_per_category = 16, use
 
         if tensorboard is not None:
             tensorboard_utils.tb_mle_batch(tensorboard, average_loss, average_n_char, average_n_correct, batch_idx)
+
+        print(f"Validation results for batch {batch_idx}:")
+        val_loss_string, val_acc_string = "", ""
+        for category_idx, category in enumerate(category_names):
+            val_loss_string += f"{category}: {loss_by_category[category_idx]}, "
+            val_acc_string += f"{category}: {n_correct_by_category[category_idx] / n_char_by_category[category_idx]}, "
+        print(f"Batch-averaged losses:\n{val_loss_string[:-2]}\nBatch-averaged accuracies:\n{val_acc_string[:-2]}\n")
+
         return {
             'loss_by_category': loss_by_category,
             'n_correct_by_category': n_correct_by_category,
@@ -87,6 +94,15 @@ def validate(model, batch_idx, mode = 'training', samples_per_category = 16, use
         average_batch_rewards = np.mean(batch_reward_by_category, axis=0)
         if tensorboard is not None:
             tensorboard_utils.tb_policy_batch(tensorboard, average_batch_rewards, average_value_loss, batch_idx)
+
+        print(f"Validation results for batch {batch_idx}:")
+        val_loss_string, val_rew_string = "", ""
+
+        for category_idx, category in enumerate(category_names):
+            val_loss_string += f"{category}: {loss_by_category[category_idx]}, "
+            val_rew_string += f"{category}: {value_loss_by_category[category_idx]}, "
+        print(f"Batch-averaged losses:\n{val_loss_string[:-2]}\nBatch-averaged accuracies:\n{val_rew_string[:-2]}\n")
+
         return {
             'loss_by_category': loss_by_category,
             'value_loss_by_category': value_loss_by_category,
