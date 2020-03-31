@@ -22,20 +22,6 @@ def validate(model, batch_idx, category_names, mode = 'training', samples_per_ca
                          num_iterations=1, batch_size = samples_per_category)
         for category_index in range(len(categories))]
 
-    # Retired in favor of np.DataFrame
-    '''
-    validation_loaders = [
-        data.DataLoader(validation_datasets[category_index], batch_size=samples_per_category,
-                        shuffle=True)
-        for category_index in range(len(categories))]
-    
-    validation_batches = [
-        next(iter(validation_loader))
-        for validation_loader in validation_loaders]
-    
-    batch_qs = [torch.squeeze(validation_batch[0]).long() for validation_batch in validation_batches]
-    batch_as = [torch.squeeze(validation_batch[1]).long() for validation_batch in validation_batches]'''
-
     validation_batches = [
         list(map(lambda x: torch.LongTensor(x.values), validation_dataset.get_sample()))
         for validation_dataset in validation_datasets
@@ -54,9 +40,6 @@ def validate(model, batch_idx, category_names, mode = 'training', samples_per_ca
             n_correct_by_category.append(n_correct)
             n_char_by_category.append(n_char)
 
-        #print(f"lbc: {loss_by_category}")
-        #print(f"ncbc: {n_correct_by_category}")
-        #print(f"ntbc: {n_char_by_category}")
         average_loss = np.mean(loss_by_category)
         average_n_correct = np.mean(n_correct_by_category)
         average_n_char = np.mean(n_char_by_category)
@@ -113,6 +96,5 @@ def validate(model, batch_idx, category_names, mode = 'training', samples_per_ca
         raise Exception("Validation must be run with either MLE or RL model.")
 
 def meta_validate():
-    pass
-    # To be implemented
+
 

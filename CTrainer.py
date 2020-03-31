@@ -37,7 +37,7 @@ class TeacherTrainer:
 		category_acc = [0.0]*num_categories
 		for num_idx in tqdm(range(num_iterations), mininterval=2, leave=False):
 			## Validation script begins
-			if num_idx % validation_interval == 0:# and num_idx != 0:
+			if num_idx % validation_interval == 0 and num_idx != 0:
 				_ = Validate.validate(self.student_model, num_idx, self.train_categories, mode='training', use_mle=(True if self.op=='mle' else False),
 							  use_rl=(True if self.op=='rl' else False), tensorboard=self.tb)
 			## Validation script ends
