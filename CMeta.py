@@ -23,8 +23,12 @@ class Learner(nn.Module):
       model_dict = saved_checkpoint['model']
       for k, v in list(model_dict.items()):
         kn = k.replace('module.', '')
+        if kn == k: continue
         model_dict[kn] = v
         del model_dict[k]
+
+      self.model.load_state_dict(model_dict)
+      self.model_pi.load_state_dict(model_dict)
     
     self.meta_optimizer = optim.SGD(self.model_pi.parameters(), meta_lr)
     self.device=device

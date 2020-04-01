@@ -95,6 +95,6 @@ def validate(model, batch_idx, category_names, mode = 'training', samples_per_ca
     else:
         raise Exception("Validation must be run with either MLE or RL model.")
 
-def meta_validate():
+# def meta_validate():
 
 
