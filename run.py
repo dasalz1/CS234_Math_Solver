@@ -14,6 +14,7 @@ from tensorboard_utils import Tensorboard
 from tensorboard_utils import tensorboard_event_accumulator
 
 from parameters import CUDA_VISIBLE_DEVICES
+from dataset import NaïveCurriculumDataset
 
 import argparse
 
@@ -33,7 +34,7 @@ if __name__ == '__main__':
 
   args = parser.parse_args()
 
-  mdsmgr = MathDatasetManager("mathematics_dataset-v1.0")
+  mdsmgr = MathDatasetManager("./mathematics_dataset-v1.0")
 
   if args.use_mle_only:
     exp_name = "math_ds_full_mle"
@@ -67,7 +68,9 @@ if __name__ == '__main__':
     checkpoint_interval = 100
     epochs = 1000000
     collate_fn = batch_collate_fn
-    ds = GeneratorDataset(categories=["algebra", "arithmetic", "comparison", "numbers"], num_iterations=num_iterations, batch_size=batch_size)
+
+    ds = NaïveCurriculumDataset(categories=['algebra', 'arithmetic', 'numbers', 'comparison'])
+    #ds = GeneratorDataset(categories=["algebra", "probability"], num_iterations=num_iterations, batch_size=batch_size)
 
   train_loader = data.DataLoader(
       ds, batch_size=batch_size, shuffle=True,#num_workers=4,

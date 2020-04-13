@@ -40,15 +40,36 @@ def main(args):
   num_validation_repos = 100
   tb = Tensorboard(args.exp_name+'_'+str(args.meta_lr)+'_'+str(args.lr), unique_name=args.unique_id)
 
-  data_loader = MetaGeneratorDataset(categories=['algebra', 'arithmetic', 'numbers', 'comparison'], k_shot=args.k_shot, num_iterations=args.num_iterations, query_batch_size=args.query_batch_size)#, shuffle=True, batch_size=1)#iter(DataLoader(MetaGeneratorDataset(categories=['algebra', 'arithmetic', 'numbers', 'comparison'], k_shot=args.k_shot, num_iterations=args.num_iterations, query_batch_size=args.query_batch_size), shuffle=True, batch_size=1))
-  # validation_data_loaders = [iter(DataLoader(MetaGeneratorDataset(categories=['calculus', 'measurement', 'polynomials', 'probability'], k_shot=args.k_shot, num_iterations=args.num_iterations, query_batch_size=args.query_batch_size), shuffle=True, batch_size=1))]
+  data_loaders = [iter(DataLoader(MetaGeneratorDataset(categories=['algebra', 'arithmetic', 'numbers', 'comparison']), shuffle=True, batch_size=1))]
+  validation_data_loaders = [iter(DataLoader(MetaGeneratorDataset(categories=['calculus', 'measurement', 'polynomials', 'probability']), shuffle=True, batch_size=1))]
+
+  # categories = mdsmgr.get_categories()
+  # types = mdsmgr.get_types()
+  # categories_datasets = [mdsmgr.build_dataset_from_category_all_types(category, types) for category in categories]
+
+  # train_categories_datasets = categories_datasets[0:4]
+  # valid_categories_datasets = categories_datasets[4:len(categories_datasets)]
+
+  # data_loaders = [
+  #   iter(DataLoader(
+  #     ds, batch_size=16, shuffle=True,
+  #     collate_fn=question_answer_to_batch_collate_fn, num_workers=0
+  #   )) for ds in train_categories_datasets
+  # ]
+
+  # validation_data_loaders = [
+  #   iter(DataLoader(
+  #     ds, batch_size=16, shuffle=True,
+  #     collate_fn=question_answer_to_batch_collate_fn, num_workers=0
+  #   )) for ds in valid_categories_datasets
+  # ]
 
   if torch.cuda.is_available:
     torch.backends.cudnn.deterministic=True
     torch.backends.cudnn.benchmark = False
-  
-  trainer = MetaTrainer(device=device, lr=args.lr, meta_lr=args.meta_lr, tb=tb, checkpoint_path=args.checkpoint_path)
-  trainer.train(data_loader, num_updates=args.num_updates, num_iterations=args.num_iterations, meta_batch_size=args.meta_batch_size)
+
+  trainer = MetaTrainer(args.meta_batch_size, device=device, num_iterations=2.5e4, tb=tb)
+  trainer.train(data_loaders, num_updates=args.num_updates)
 
 if __name__=='__main__':
   # if args.world_size > 1: set_start_method('spawn')
