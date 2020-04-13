@@ -7,12 +7,9 @@ class CurriculumNetwork(nn.Module):
 
         super(CurriculumNetwork, self).__init__()
         hidden_layer_size = 128
-        self.input_size = input_size
-        self.output_size = output_size
-        assert(input_size == output_size)
-        # For curriculum network, input and output size should be same (category performance->category percentage)
-        self.layer1 = nn.Linear(self.input_size, hidden_layer_size)
-        self.layer2 = nn.Linear(hidden_layer_size, self.output_size)
+        self.input_output_size = input_output_size
+        self.layer1 = nn.Linear(self.input_output_size, hidden_layer_size)
+        self.layer2 = nn.Linear(hidden_layer_size, self.input_output_size)
 
     def forward(self, input):
         model = torch.nn.Sequential(
