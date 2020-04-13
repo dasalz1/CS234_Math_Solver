@@ -70,12 +70,10 @@ class GeneratorDataset(Dataset):
         return self.__getitem__(0)
 
 class MetaGeneratorDataset(Dataset):
-    def __init__(self, categories=["algebra__linear_1d", "probability"], difficulty=0.5, num_iterations=32, batch_size=4, k_shot=5):
-        problems = collections.defaultdict(lambda: [])
-        initial_modules = modules.train(_make_entropy_fn(difficulty, 1))
-        filtered_modules = _filter_and_flatten(categories, initial_modules)
-        self.sampled_modules = list(six.iteritems(filtered_modules))
-        self.num_iterations = int(num_iterations * batch_size)
+    
+    def __init__(self, categories=["algebra__linear_1d", "probability"], difficulty=0.5, num_iterations=32, query_batch_size=4, k_shot=5, refresh_rate=100):
+        super(MetaGeneratorDataset, self).__init__()
+        self.num_iterations = num_iterations
         self.k_shot = k_shot
         self.categories = categories
         self.query_batch_size = query_batch_size
@@ -174,30 +172,25 @@ class NaïveCurriculumDataset(Dataset):
         return ques, anws
         
 class DeepCurriculumDataset(Dataset):
-    def __init__(self, categories, mean_accuracy_by_category, model, difficulty=0.5, num_iterations = 12, batch_size = 4, starting_eps=0, eps_grad=0):
+    def __init__(self, categories, mean_accuracy_by_category, difficulty=0.5, num_iterations = 12, batch_size = 4, model = None):
+        assert(len(self.categories) == len(mean_accuracy_by_category))
         self.categories = categories
-        self.model = model
         self.total_iterations = int(num_iterations * batch_size)
         self.current_iteration = 0
-        self.starting_eps = starting_eps
-        self.eps_grad = eps_grad
-        assert(len(self.categories) == len(mean_accuracy_by_category))
 
+        assert (np.sum(self.category_probabilities) == 1)
         self.category_probabilities = self.model.forward(mean_accuracy_by_category)
         initial_modules = modules.train(_make_entropy_fn(difficulty, 1))
         filtered_modules = _filter_and_flatten(categories, initial_modules)
         self.sampled_modules = list(six.iteritems(filtered_modules))
-        assert (torch.sum(self.category_probabilities) == 1)
 
     def __len__(self):
         return self.total_iterations
 
     def __getitem__(self, idx):
-        if np.random.random() < self.starting_eps + self.current_iteration * self.eps_grad:
-            selected_module = self.sampled_modules[np.random.randint(0, len(self.sampled_modules))][1]
-        else:
-            selected_module = self.sampled_modules[torch.multinomial(self.category_probabilities, 1)[0]][1]
-        problem = sample_from_module(selected_module, show_dropped=False)[0]
+        # TODO: Following line could have list shaping/access issues? Should review torch.multinomial and sample_from_module functions definitions
+        # Also, can Torch backprop through multinomial stochasticity in the first place?
+        problem = sample_from_module(self.sampled_modules[torch.multinomial(self.category_probabilities, 1)[0]], show_dropped=False)[0]
         # converts to tokens and adds BOS and EOS tokens
         ques, anws = np_encode_string(str(problem[0])), np_encode_string(str(problem[1]))
 

@@ -44,8 +44,8 @@ def main(args):
     # User parameters
     data_loader_batch_size = 4
     num_iterations = 1.e5
-    categories = ['algebra', 'arithmetic', 'probability', 'numbers'] #full_categories
-    mean_accuracy_by_category = torch.zeros(len(categories))
+    categories = full_categories
+    mean_accuracy_by_category = np.zeros_like(categories)
     curriculum_step_length = 16
 
     # Determine exp_name and unique_id
@@ -64,16 +64,16 @@ def main(args):
     tb = Tensorboard(args.exp_name, unique_name=args.unique_id)
     mdsmgr = MathDatasetManager(math_dataset_file_path)
 
-    '''# Get data categories and types from static dataset
+    # Get data categories and types from static dataset
     categories = mdsmgr.get_categories()
-    types = mdsmgr.get_types()'''
+    types = mdsmgr.get_types()
 
     # Algorithm-Specific Parameters
     if args.use_mle_only:
         batch_size = 1024
         checkpoint_interval = 10000
         epochs = 20
-        collate_fn = batch_collate_fn#question_answer_to_batch_collate_fn
+        collate_fn = question_answer_to_batch_collate_fn
     else:
         batch_size = 1
         epochs = num_iterations
@@ -83,7 +83,7 @@ def main(args):
 
     # Create teacher and student model and optimizers
     # TODO: nn.DataParallel helpful?
-    student_model = Policy_Network().to(device)
+    student_model = torch.nn.DataParallel(Policy_Network().to(device))  # Policy_Network().to(device)
     teacher_model = CurriculumNetwork(len(categories))
     student_optimizer = optim.Adam(student_model.parameters(), lr=6.e-4, betas=(0.9, 0.995), eps=1e-8)
     teacher_optimizer = optim.Adam(teacher_model.parameters(), lr=4.e-2, betas=(0.9, 0.995), eps=1e-8)
@@ -98,17 +98,14 @@ def main(args):
         # Create dataset and dataloader
         # TODO: num_iterations and batch_size okay here? Were hard-coded to 12 and 4 before, not sure why.
         # TODO: Is there a difference between data_loader_batch_size and batch_size?
-        curriculum_dataset = DeepCurriculumDataset(categories, mean_accuracy_by_category, teacher_model, difficulty = 0.5,
-                                                   num_iterations = num_iterations, batch_size = batch_size,
-                                                   starting_eps = 0.95-curriculum_step * curriculum_step_length / num_iterations,
-                                                   eps_grad = -1/num_iterations)
-        #curriculum_dataset = NaïveCurriculumDataset(categories=['algebra', 'arithmetic', 'probability', 'numbers'])
+        curriculum_dataset = DeepCurriculumDataset(categories, mean_accuracy_by_category, difficulty=0.5,
+                                                   num_iterations=num_iterations, batch_size=batch_size, model=teacher_model)
         curriculum_data_loader = DataLoader(curriculum_dataset, batch_size=data_loader_batch_size, shuffle=True,
                                             collate_fn=collate_fn, num_workers=len(CUDA_VISIBLE_DEVICES))
         # Create scheduler, trainer, and optimizer
         # TODO: Split by RL/MLE here? Ex. separate model architectures?
         curriculum_trainer = CurriculumTrainer(args.use_mle_only, args.use_rl_only, device)
-        total_loss = curriculum_trainer.train(curriculum_data_loader, student_model, student_optimizer, student_scheduler, tensorboard = tb, num_epochs=epochs, checkpoint_interval=checkpoint_interval, iterations=curriculum_step * curriculum_step_length)
+        total_loss = curriculum_trainer.train(curriculum_data_loader, student_model, teacher_model, student_optimizer, teacher_optimizer, student_scheduler, tb, epochs=epochs, checkpoint_interval=checkpoint_interval, iterations=curriculum_step * curriculum_step_length)
         total_loss.backward()
         torch.nn.utils.clip_grad_norm_(teacher_model.parameters(), 0.1)
         teacher_optimizer.step()
