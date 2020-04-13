@@ -70,7 +70,7 @@ class TeacherTrainer:
 				if 'meta' in self.op:
 					data = map(lambda x: torch.LongTensor(x).to(self.device), data_loader[task].get_sample())
 					loss, acc = self.student_model.loss_op(data=data, op=self.op)
-					curr_grads = autograd.grad(loss, self.student_model.parameters(), create_graph=True, allow_unused=True)
+					curr_grads = autograd.grad(loss, self.student_model.model_pi.parameters(), create_graph=True, allow_unused=True)
 					sum_grads = [torch.add(i, j) for i, j in zip(sum_grads, curr_grads) if (j is not None and i is not None)] if sum_grads is not None else curr_grads
 					valid_grads[task] = [torch.add(i, j) for i, j in zip(valid_grads[task], curr_grads) if (j is not None and i is not None)] if valid_grads[task] is not 0.0 else curr_grads
 					accs[task].append(acc); losses[task].append(loss.item())
@@ -123,7 +123,7 @@ class TeacherTrainer:
 		for task in unique_tasks:
 			if 'meta' in self.op:
 				# accumulate validation gradients and metrics from task for loop
-				grads = sum([grad.data/task_counts[task].abs().mean() for grad in valid_grads[task] if grad is not None])
+				grads = sum([(grad.data/task_counts[task]).abs().mean() for grad in valid_grads[task] if grad is not None])
 				category_acc[task] = category_acc[task]/2 + np.mean(accs[task])/2
 				loss = np.mean(losses[task])
 			else:
@@ -131,7 +131,7 @@ class TeacherTrainer:
 				valid_data = map(lambda x: torch.LongTensor(x.values).to(self.device), data_loader[task].get_valid_sample(self.validation_samples))
 				loss, acc = self.student_model.loss_op(valid_data, self.op)
 				category_acc[task] = category_acc[task]/2 + acc/2
-				grads = autograd.grad(loss, self.student_model.parameters(), create_graph=True, allow_unused=True)
+				grads = autograd.grad(loss, self.student_model.model_pi.parameters(), create_graph=True, allow_unused=True)
 				grads = sum([(grad.data/task_counts[task]).abs().mean() for grad in grads if grad is not None])
 				loss = loss.item()
 				iter_acc.append(acc); iter_loss.append(loss)
