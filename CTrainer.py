@@ -17,13 +17,13 @@ class TeacherTrainer:
 		self.op = op
 		self.device = device
 		self.train_categories = train_categories
-
 		self.teacher_model = teacher_model
 		# Teacher is either parametrized by a neural network or just the raw parameters of the Multinomial distribution
 		if teacher_model:
 			self.teacher_optimizer = optim.SGD(self.teacher_model.parameters(), teacher_lr)
 			self.loss_scale = 1
 		else:
+			num_categories = len(train_categories)
 			self.teacher_params = torch.Variable(torch.FloatTensor([1/num_categories]*num_categories).contiguous().view(-1), requires_grad=True).to(self.device)
 			# scale loss if parametrizing distribution directly
 			self.loss_scale = teacher_lr
@@ -32,7 +32,7 @@ class TeacherTrainer:
 		self.student_optimizer = student_optimizer
 		self.tb = tb
 		self.validation_samples = validation_samples
- 
+
 	def train_teacher(self, data_loader=None, K=10, task_batch_size=10, num_categories=1, num_iterations=100000, validation_interval = 500):
 		category_acc = [0.0]*num_categories
 		for num_idx in tqdm(range(num_iterations), mininterval=2, leave=False):
@@ -44,7 +44,6 @@ class TeacherTrainer:
 					_ = Validate.validate(self.student_model, num_idx, self.train_categories, mode='training',
 									  use_mle=(True if self.op == 'mle' else False), use_rl=(True if self.op == 'rl' else False), tensorboard=self.tb)
 			## Validation script ends
-
 			if self.teacher_model:
 				category_probs = self.teacher_model(torch.FloatTensor(category_acc).contiguous().view(1, -1).to(self.device)).contiguous().view(-1)
 			else:
@@ -70,23 +69,16 @@ class TeacherTrainer:
 				if 'meta' in self.op:
 					data = map(lambda x: torch.LongTensor(x).to(self.device), data_loader[task].get_sample())
 					loss, acc = self.student_model.loss_op(data=data, op=self.op)
-					curr_grads = autograd.grad(loss, self.student_model.model_pi.parameters(), create_graph=True, allow_unused=True)
+					curr_grads = autograd.grad(loss, self.student_model.parameters(), create_graph=True, allow_unused=True)
 					sum_grads = [torch.add(i, j) for i, j in zip(sum_grads, curr_grads) if (j is not None and i is not None)] if sum_grads is not None else curr_grads
 					valid_grads[task] = [torch.add(i, j) for i, j in zip(valid_grads[task], curr_grads) if (j is not None and i is not None)] if valid_grads[task] is not 0.0 else curr_grads
 					accs[task].append(acc); losses[task].append(loss.item())
 					iter_loss.append(loss.item()); iter_acc.append(acc)
 				else:
+					# just aggregate data for vectorized batch after for loop
 					x, y = data_loader[task].get_sample()
-					# x, y = data
-					# .fillna(PAD).values.
 					all_data = (pd.concat([all_data[0], x], axis=0).fillna(PAD), pd.concat([all_data[1], y], axis=0).fillna(PAD)) if all_data else (x, y)
 					# torch.cat((all_data, x), dim=1)
-
-				# regular optimization step
-				# else:
-					# self.student_optimizer.zero_grad()
-					# loss.backward()
-					# self.student_optimizer.step()
 
 			if 'meta' in self.op:
 				# average gradients and apply meta gradients
@@ -97,6 +89,7 @@ class TeacherTrainer:
 				_, _, dummy_x, dummy_y = data
 				self.student_model.write_grads(sum_grads, self.student_optimizer, (dummy_x, dummy_y), self.op)
 			else:
+				# format dataframes for model input and batch optimization
 				all_data = map(lambda x: torch.LongTensor(x.values).to(self.device), all_data)
 				loss, acc = self.student_model.loss_op(data=all_data, op=self.op)
 				self.student_optimizer.zero_grad()
@@ -123,7 +116,7 @@ class TeacherTrainer:
 		for task in unique_tasks:
 			if 'meta' in self.op:
 				# accumulate validation gradients and metrics from task for loop
-				grads = sum([(grad.data/task_counts[task]).abs().mean() for grad in valid_grads[task] if grad is not None])
+				grads = sum([grad.data/task_counts[task].abs().mean() for grad in valid_grads[task] if grad is not None])
 				category_acc[task] = category_acc[task]/2 + np.mean(accs[task])/2
 				loss = np.mean(losses[task])
 			else:
@@ -131,7 +124,7 @@ class TeacherTrainer:
 				valid_data = map(lambda x: torch.LongTensor(x.values).to(self.device), data_loader[task].get_valid_sample(self.validation_samples))
 				loss, acc = self.student_model.loss_op(valid_data, self.op)
 				category_acc[task] = category_acc[task]/2 + acc/2
-				grads = autograd.grad(loss, self.student_model.model_pi.parameters(), create_graph=True, allow_unused=True)
+				grads = autograd.grad(loss, self.student_model.parameters(), create_graph=True, allow_unused=True)
 				grads = sum([(grad.data/task_counts[task]).abs().mean() for grad in grads if grad is not None])
 				loss = loss.item()
 				iter_acc.append(acc); iter_loss.append(loss)

@@ -11,8 +11,8 @@ from parameters import MAX_QUESTION_SIZE, MAX_ANSWER_SIZE
 from multiprocessing import Process, Queue
 
 class GeneratorDataset(Dataset):
-    
-    def __init__(self, categories=["algebra__linear_1d", "probability"], num_iterations=12, batch_size=4, refresh_rate=10000):
+
+    def __init__(self, categories=["algebra__linear_1d", "probability"], num_iterations=12, batch_size=4, refresh_rate=5000):
         super(GeneratorDataset, self).__init__()
         self.categories = categories
         self._create_modules()

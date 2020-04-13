@@ -50,8 +50,7 @@ class Policy_Network(nn.Module):
     def loss_op(self, data, op, tb=None, num_iter=None, valid_data=None):
         batch_qs, batch_as = data
         if 'rl' in op:
-            policy_losses, value_losses, batch_rewards = Policy_Network.policy_batch_loss(self, batch_qs, batch_as, 0.9, device=self.device)
-
+            policy_losses, value_losses, batch_rewards = self.policy_batch_loss(batch_qs, batch_as, 0.9)
             return policy_losses+value_losses, batch_rewards
         elif 'mle' in op:
             mle_loss, n_correct, n_char = self.mle_batch_loss(batch_qs, batch_as)
@@ -168,7 +167,7 @@ class Policy_Network(nn.Module):
 
             # if the action taken is EOS or if end of sequence trajectory ends
             complete *= (1 - ((actions==EOS) | (trg_t==EOS)).float())
-        
+
         returns = Policy_Network.get_returns(rewards, batch_size, gamma)
         # print(values)
         advantages = returns - values

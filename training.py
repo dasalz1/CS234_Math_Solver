@@ -226,7 +226,7 @@ class Trainer:
       current_as = torch.cat((current_as, actions), dim=1)
       curr_log_probs = m.log_prob(actions.contiguous.view(-1)).contiguous().view(-1, 1)
       # calculate reward based on character cross entropy
-      curr_rewards = self.calc_reward(actions, trg_t)
+      curr_rewards = Trainer.calc_reward(actions, trg_t)
       
       # update terms
       rewards = torch.cat((rewards, curr_rewards), dim=1).to(device)
@@ -236,7 +236,7 @@ class Trainer:
       # if the action taken is EOS or if end of sequence trajectory ends
       complete *= (1 - ((actions==EOS) | (trg_t==EOS)).float())
     
-    returns = self.get_returns(rewards, batch_size, gamma)
+    returns = Trainer.get_returns(rewards, batch_size, gamma)
     
     advantages = returns - values
     # advantages = returns
