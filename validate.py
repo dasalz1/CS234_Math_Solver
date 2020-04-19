@@ -32,6 +32,7 @@ def validate(model, batch_idx, category_names, mode = 'training', samples_per_ca
 
     if use_mle and not use_rl:
         loss_by_category = []
+        exact_by_category = []
         n_correct_by_category = []
         n_char_by_category = []
         for category_index in range(len(categories)):
@@ -39,20 +40,38 @@ def validate(model, batch_idx, category_names, mode = 'training', samples_per_ca
             loss_by_category.append(loss.item())
             n_correct_by_category.append(n_correct)
             n_char_by_category.append(n_char)
+            ## Calculate exact matching percentage
+            num_correct = 0
+            pred_logits = model.action_transformer(input_ids=batch_qs[category_index],
+                                                   decoder_input_ids=batch_as[category_index])
+            pred_chars = torch.max(pred_logits, dim=-1)[1]
+            trg_as = batch_as[category_index]
+            # TODO (minor): Vectorize this loop?
+            for batch_idx in range(samples_per_category):
+                if pred_chars[batch_idx].size()[-1] != trg_as.size()[-1]:
+                    break
+                if torch.all(pred_chars[batch_idx].eq(trg_as[batch_idx])):
+                    num_correct += 1
+            exact_by_category.append(num_correct / samples_per_category)
+            ##
 
         average_loss = np.mean(loss_by_category)
         average_n_correct = np.mean(n_correct_by_category)
         average_n_char = np.mean(n_char_by_category)
 
+
+
         if tensorboard is not None:
             tensorboard_utils.tb_mle_batch(tensorboard, average_loss, average_n_char, average_n_correct, batch_idx)
 
         print(f"Validation results for batch {batch_idx}:")
-        val_loss_string, val_acc_string = "", ""
+        val_loss_string, val_acc_string, val_exact_string = "", "", ""
         for category_idx, category in enumerate(category_names):
             val_loss_string += f"{category}: {loss_by_category[category_idx]}, "
             val_acc_string += f"{category}: {n_correct_by_category[category_idx] / n_char_by_category[category_idx]}, "
-        print(f"Batch-averaged losses:\n{val_loss_string[:-2]}\nBatch-averaged accuracies:\n{val_acc_string[:-2]}\n")
+            val_exact_string += f"{category}: {exact_by_category[category_idx]}, "
+        print(f"Batch-averaged losses:\n{val_loss_string[:-2]}\nBatch-averaged accuracies:\n{val_acc_string[:-2]}\n\
+              Batch-averaged exact matching accuracies:\n{val_exact_string[:-2]}\n")
 
         return {
             'loss_by_category': loss_by_category,
@@ -75,6 +94,7 @@ def validate(model, batch_idx, category_names, mode = 'training', samples_per_ca
             batch_reward_by_category.append(batch_reward)
         average_value_loss = np.mean(value_loss_by_category)
         average_batch_rewards = np.mean(batch_reward_by_category, axis=0)
+
         if tensorboard is not None:
             tensorboard_utils.tb_policy_batch(tensorboard, average_batch_rewards, average_value_loss, batch_idx)
 

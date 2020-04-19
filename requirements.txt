@@ -6,7 +6,9 @@ mathematics-dataset
 panda
 torch
 tqdm
+tensorboard
 tensorboardX
 boto3
 filelock
 transformers==2.4.1
+pandas
