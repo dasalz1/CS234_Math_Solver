@@ -7,7 +7,7 @@ from transformers import AdamW
 from MathConstants import *
 from dataset import MetaGeneratorDataset, GeneratorDataset
 from datetime import date
-from CMeta import Learner
+from CMeta import MetaLearner
 from A3C import Policy_Network
 from curriculumModel import CurriculumNetwork
 from torch.multiprocessing import set_start_method
@@ -52,7 +52,7 @@ def main(args):
     data_loader = [MetaGeneratorDataset(categories=[subc], k_shot=args.k_shot, 
                             num_iterations=args.num_iterations, query_batch_size=args.task_batch_size) for subc in train_subcategories]
 
-    student_model = Learner(device=device, meta_lr=args.meta_lr, num_updates=args.num_updates, checkpoint_path=args.checkpoint_path)
+    student_model = MetaLearner(device=device, meta_lr=args.meta_lr, num_updates=args.num_updates, checkpoint_path=args.checkpoint_path)
   else:
     data_loader = [GeneratorDataset(categories=[subc], num_iterations=args.num_iterations, batch_size=args.task_batch_size) for subc in train_subcategories]
 

@@ -1,22 +1,32 @@
-from dataset import GeneratorDataset, batch_collate_fn
-from torch.utils import data
+from dataset import GeneratorDataset
+from torch import autograd
 from training import Trainer
 import torch
 import numpy as np
 import tensorboard_utils
 from A3C import Policy_Network
+from CMeta import MetaLearner
+import torch.optim as optim
+import MathConstants
+from copy import deepcopy
 
 category_mappings = {
     'training': ['algebra', 'arithmetic', 'probability', 'numbers'],
     'induction': ['polynomials', 'calculus', 'measurement', 'comparison']
 }
 
+subcategories_by_category = {
+    category_name: sum(MathConstants.subcategories[category_name])
+    for category_name in sum(category_mappings.values())
+}
+
 def validate(model, batch_idx, category_names, mode = 'training', samples_per_category = 16, use_mle=True, use_rl = False, tensorboard = None):
     if mode not in category_mappings:
         mode = 'training'
-        print("Mode not found in category mappings; reverting to default categories.")
+        print("Mode not found in category mappings; reverting to default training categories.")
     categories = category_mappings[mode]
-    num_datapoints = samples_per_category * len(categories)
+    assert ((use_rl and not use_mle) or (use_mle and not use_rl))
+
     validation_datasets = [
         GeneratorDataset(categories = [categories[category_index]],
                          num_iterations=1, batch_size = samples_per_category)
@@ -115,5 +125,83 @@ def validate(model, batch_idx, category_names, mode = 'training', samples_per_ca
     else:
         raise Exception("Validation must be run with either MLE or RL model.")
 
-def meta_validate():
-    pass
+def meta_validate(starting_model, batch_idx, category_names, mode = 'induction', samples_per_category = 16, use_mle=True, use_rl = False, tensorboard = None, K = 5):
+    if mode not in category_mappings:
+        mode = 'induction'
+        print("Mode not found in category mappings; reverting to default induction categories.")
+    categories = category_mappings[mode]
+    average_support_accs_by_category = [[] for _ in range(len(categories))]
+    average_query_accs_by_category = [[] for _ in range(len(categories))]
+    average_support_losses_by_category = [[] for _ in range(len(categories))]
+    average_query_losses_by_category = [[] for _ in range(len(categories))]
+    num_support_sgd_steps = 1
+    assert((use_rl and not use_mle) or (use_mle and not use_rl))
+    assert(starting_model is MetaLearner)
+    op = 'meta-mle' if use_mle else 'meta-rl'
+    loss_by_category, acc_by_category, exact_by_category = [], [], []
+
+    # Meta-train separately on each category, treating subcategories as tasks
+    for category_index, category in enumerate(categories):
+        meta_model = deepcopy(starting_model)
+        subcategories = subcategories_by_category[category]
+        N = len(subcategories)
+        sum_grads, all_data, valid_grads = None, None, [0.0] * len(subcategories)
+        support_accs, support_losses = [[] for _ in range(N)], [[] for _ in range(N)]
+        query_accs, query_losses = [[] for _ in range(N)], [[] for _ in range(N)]
+        optimizer = optim.Adam(meta_model.parameters(), lr=6.e-4, betas=(0.9, 0.995), eps=1e-8)
+
+        # Create 2K datapoints, K for support and K for query
+        meta_validation_datasets = [
+            GeneratorDataset(categories=subcategory,
+                             num_iterations=1, batch_size=2*K)
+            for subcategory in subcategories]
+
+        validation_batches = [
+            list(map(lambda x: torch.LongTensor(x.values), meta_validation_dataset.get_sample()))
+            for meta_validation_dataset in meta_validation_datasets
+        ]
+
+        batch_qs_by_category = [validation_batch[0] for validation_batch in validation_batches]
+        batch_as_by_category = [validation_batch[1] for validation_batch in validation_batches]
+
+        # Split into support/query
+        support_qs = batch_qs_by_category[category_index][:K]
+        support_as = batch_as_by_category[category_index][:K]
+        query_qs = batch_qs_by_category[category_index][K:]
+        query_as = batch_as_by_category[category_index][K:]
+
+        for subcategory_idx in range(N):
+            for _ in range(num_support_sgd_steps):
+                loss, acc = meta_model.loss_op(data=support_qs, op=op)
+                current_step_grads = autograd.grad(loss, meta_model.parameters(), create_graph=True, allow_unused=True)
+                sum_grads = [torch.add(i, j) for i, j in zip(sum_grads, current_step_grads) if
+                             (j is not None and i is not None)] if sum_grads is not None else current_step_grads
+                valid_grads[subcategory_idx] = [torch.add(i, j) for i, j in zip(valid_grads[subcategory_idx], current_step_grads) if
+                                     (j is not None and i is not None)] if valid_grads[subcategory_idx] is not 0.0 else current_step_grads
+                support_accs[subcategory_idx].append(acc)
+                support_losses[subcategory_idx].append(loss.item())
+
+                # average gradients and apply meta-gradients (support)
+                for idx in range(len(sum_grads)):
+                    sum_grads[idx].data = sum_grads[idx].data / K
+                dummy_x, dummy_y = support_qs[0], support_as[0]
+                meta_model.write_grads(sum_grads, optimizer, (dummy_x, dummy_y), op)
+
+            # calculate query results
+            loss, acc = meta_model.loss_op(data=query_qs, op=op)
+
+            query_accs[subcategory_idx] = np.mean(acc)
+            query_losses[subcategory_idx] = np.mean(loss)
+
+        average_support_accs_by_category[category_index] = np.mean(support_accs)
+        average_query_accs_by_category[category_index] = np.mean(query_accs)
+        average_support_losses_by_category[category_index] = np.mean(support_losses)
+        average_query_losses_by_category[category_index] = np.mean(query_losses)
+
+        if tensorboard:
+            tensorboard.add_scalars(
+                {f"{category} query accuracy": average_support_accs_by_category[category_index]\
+               , f"{category} query loss": average_query_losses_by_category[category_index]},
+                group="train", sub_group="batch", global_step=batch_idx)
+
+    ######

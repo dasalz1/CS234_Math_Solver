@@ -12,9 +12,9 @@ import os
 from tqdm import tqdm
 from transformers import AdamW
 
-class Learner(nn.Module):
+class MetaLearner(nn.Module):
   def __init__(self, device, meta_lr=1e-4, checkpoint_path='./checkpoint-mle.pth', num_updates=5):
-    super(Learner, self).__init__()
+    super(MetaLearner, self).__init__()
     self.model = Policy_Network(data_parallel=False, use_gpu=False if str(device)=='cpu' else True)
     self.model_pi = Policy_Network(data_parallel=False, use_gpu=False if str(device)=='cpu' else True)
 

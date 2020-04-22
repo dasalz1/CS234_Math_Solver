@@ -9,7 +9,7 @@ from tqdm import tqdm
 import numpy as np
 import pandas as pd
 from transformer.Constants import PAD
-import Validate
+import validate
 
 class TeacherTrainer:
 
@@ -33,16 +33,16 @@ class TeacherTrainer:
 		self.tb = tb
 		self.validation_samples = validation_samples
 
-	def train_teacher(self, data_loader=None, K=10, task_batch_size=10, num_categories=1, num_iterations=100000, validation_interval = 500):
+	def train_teacher(self, data_loader=None, K=10, task_batch_size=10, num_categories=1, num_iterations=100000, validation_interval = 50):
 		category_acc = [0.0]*num_categories
 		for num_idx in tqdm(range(num_iterations), mininterval=2, leave=False):
 			## Validation script begins
 			if num_idx % validation_interval == 0 and num_idx != 0:
 				if 'meta' in self.op:
-					_ = Validate.meta_validate()
+					_ = validate.meta_validate()
 				else:
-					_ = Validate.validate(self.student_model, num_idx, self.train_categories, mode='training',
-									  use_mle=(True if self.op == 'mle' else False), use_rl=(True if self.op == 'rl' else False), tensorboard=self.tb)
+					_ = validate.validate(self.student_model, num_idx, self.train_categories, mode='training',
+										  use_mle=(True if self.op == 'mle' else False), use_rl=(True if self.op == 'rl' else False), tensorboard=self.tb)
 			## Validation script ends
 			if self.teacher_model:
 				category_probs = self.teacher_model(torch.FloatTensor(category_acc).contiguous().view(1, -1).to(self.device)).contiguous().view(-1)
