@@ -9,4 +9,4 @@ tqdm
 tensorboardX
 boto3
 filelock
-transformers==2.4.1
+transformers==4.30.0
